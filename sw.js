@@ -1,5 +1,5 @@
 // Offline support. Network first, so updates show at once. Cache when offline.
-var CACHE = 'scroller-v2';
+var CACHE = 'scroller-v3';
 var FILES = ['./', 'index.html', 'manifest.webmanifest', 'icons/icon.svg',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -18,7 +18,8 @@ self.addEventListener('activate', function (e) {
 self.addEventListener('fetch', function (e) {
   var req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  e.respondWith(fetch(req).then(function (res) {
+  // no-cache: always ask GitHub for the newest file, so updates show at once.
+  e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
     var copy = res.clone();
     caches.open(CACHE).then(function (c) { c.put(req, copy); });
     return res;
