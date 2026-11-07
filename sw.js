@@ -1,5 +1,5 @@
 // Offline support. Network first, so updates show at once. Cache when offline.
-var CACHE = 'scroller-v5';
+var CACHE = 'scroller-v6';
 var FILES = ['./', 'index.html', 'test.html', 'reader.js', 'manifest.webmanifest', 'icons/icon.svg',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
@@ -17,9 +17,7 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   var req = e.request;
-  var url = new URL(req.url);
-  // Pages from other sites (api/) are never saved.
-  if (req.method !== 'GET' || url.origin !== location.origin || url.pathname.indexOf('/api/') === 0) return;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   // no-cache: always ask GitHub for the newest file, so updates show at once.
   e.respondWith(fetch(req, { cache: 'no-cache' }).then(function (res) {
     var copy = res.clone();

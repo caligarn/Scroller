@@ -1,49 +1,43 @@
 # Scroller
 
-A simple web app for iPad. It scrolls a web page by itself, so you can read manga and long pages hands-free.
+Small buttons that scroll any web page in Safari, so you can read manga and long pages hands-free. Made for iPad.
+
+The buttons come from a Safari bookmark. The bookmark runs on the real page in your own Safari, so it works on sites that block other apps.
+
+## Set it up (one time)
+
+1. Open the Scroller address in Safari, for example `https://scroller-hw96.vercel.app`.
+2. Tap **Copy bookmark**.
+3. In Safari, tap **Share**, then **Add to Favorites**.
+4. Touch and hold the new bookmark in the Favorites bar. Tap **Edit**. Name it **Scroller**. Delete the address and paste.
+
+No Favorites bar? Open **Settings**, then **Apps**, then **Safari**. Turn on **Show Favorites Bar**.
+
+You can also add the Scroller page to your Home Screen (**Share**, then **Add to Home Screen**). It keeps the setup steps close.
 
 ## Use it
 
-1. Paste a web address and tap **Open**.
-2. Tap **▶** to start. Tap **❚❚** to stop.
-3. Use **− +** to change the speed. Use **A− A+** to change the size.
-4. Tap **✕** to go back to the start screen.
+1. Open a manga page in Safari.
+2. Tap **Scroller** in the Favorites bar. A small bar shows at the bottom.
+3. Tap **▶** to start. Tap **❚❚** to stop.
+4. Use **− +** to change the speed. Use **A− A+** to change the size.
+5. Tap **✕**, or tap **Scroller** again, to remove the bar.
 
-The buttons fade away after 3 seconds. Tap the page to show them again. Links on the page stay inside the app.
+The buttons fade away after 3 seconds. Tap the page to show them again. The page stops at the end.
 
-To check the app, tap **Open the test page** on the start screen.
-
-## How it works
-
-Many sites do not let other pages show them in a frame. So the app gets each page on its own server (`api/read.js`). Then it sends the page back with the small buttons added (`reader.js`). Images and other files still load from the real site.
-
-Some sites still do not work:
-- Sites that need you to log in.
-- Sites that block servers (for example, with a "check you are human" page).
-- Sites that build the whole page with scripts.
-
-If a site does not open, the app shows a link to open it in Safari.
+To check your bookmark, open `test.html` (for example `https://scroller-hw96.vercel.app/test.html`) and tap **Scroller**.
 
 ## Put it online
 
-The app needs **Vercel**, because `api/read.js` runs on the server. GitHub Pages cannot run it.
+Any static host works. No build step.
 
-1. On vercel.com, import the `caligarn/Scroller` repository. No settings are needed.
-2. Set the production branch to the branch that has these files.
-3. Vercel gives you an address, for example `https://scroller.vercel.app`.
-
-## Save it to the iPad Home Screen
-
-1. Open the Vercel address in **Safari**.
-2. Tap the **Share** button.
-3. Tap **Add to Home Screen**, then **Add**.
-4. Open **Scroller** from the Home Screen. It opens full screen.
+- **Vercel:** import the `caligarn/Scroller` repository. No settings are needed.
+- **GitHub Pages:** go to **Settings**, then **Pages**. Deploy from the branch, `/ (root)` folder.
 
 ## Files
 
-- `index.html`: the start screen.
-- `api/read.js`: gets a page and adds the buttons.
-- `reader.js`: the buttons and the scrolling.
-- `test.html`: a test page.
+- `reader.js`: the buttons and the scrolling. The start page makes the bookmark from this file.
+- `index.html`: the start page, with the **Copy bookmark** button and the steps.
+- `test.html`: a long page to test the bookmark.
 - `manifest.webmanifest` and `icons/`: the Home Screen name and icon.
-- `sw.js`: lets the start screen open with no internet.
+- `sw.js`: lets the start page open with no internet.
