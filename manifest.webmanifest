@@ -1,5 +1,5 @@
 {
-  "name": "Scroll Reader",
+  "name": "Scroller",
   "short_name": "Scroller",
   "description": "Scrolls a web page by itself so you can read hands-free.",
   "start_url": "./",
