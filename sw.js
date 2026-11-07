@@ -1,5 +1,5 @@
 // Offline support. Network first, so updates show at once. Cache when offline.
-var CACHE = 'scroller-v7';
+var CACHE = 'scroller-v8';
 var FILES = ['./', 'index.html', 'test.html', 'reader.js', 'manifest.webmanifest', 'icons/icon.svg',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 

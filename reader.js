@@ -7,15 +7,20 @@
   // The buttons fade after this many milliseconds.
   var HIDE_AFTER = 3000;
 
+  // Speeds in screen points per second. The steps get larger as the speed goes up.
+  var SPEEDS = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500, 600, 800,
+    1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000];
+
   function load(k, d) { try { return +localStorage.getItem(k) || d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  // Speed is in screen points per second.
-  var MIN = 20, MAX = 1000, STEP = 20;
-  var speed = load('scroller-pps', 120), size = load('scroller-size', 100);
+  // Start at the saved speed, or the nearest speed in the list.
+  var saved = load('scroller-pps', 120), si = 0;
+  SPEEDS.forEach(function (v, i) { if (Math.abs(v - saved) < Math.abs(SPEEDS[si] - saved)) si = i; });
+  var size = load('scroller-size', 100);
   var on = false, alive = true, last = 0, lock = null, hideT = 0, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
-  var pos = 0, lastSet = 0, atEnd = 0;
+  var pos = 0, atEnd = 0, byHand = false;
   var root = document.scrollingElement || document.documentElement;
 
   // Find the part of the page that scrolls.
@@ -28,19 +33,19 @@
     return (root.scrollHeight - root.clientHeight >= gap) ? root : best;
   }
 
-  // The button bar. A shadow root keeps it apart from the page's own styles.
+  // The button bar, on the left side. A shadow root keeps it apart from the page's own styles.
   var host = document.createElement('div');
-  host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;left:50%;transform:translateX(-50%);' +
-    'bottom:max(14px,calc(env(safe-area-inset-bottom) + 6px))';
+  host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;top:50%;transform:translateY(-50%);' +
+    'left:max(10px,env(safe-area-inset-left))';
   var shadow = host.attachShadow({ mode: 'open' });
-  var css = '.bar{display:flex;align-items:center;gap:4px;padding:5px;border-radius:999px;background:rgba(20,20,24,.85);' +
-    '-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font:14px -apple-system,system-ui,sans-serif;' +
+  var css = '.bar{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px;border-radius:999px;background:rgba(20,20,24,.85);' +
+    '-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font:13px -apple-system,system-ui,sans-serif;' +
     'transition:opacity .5s;-webkit-user-select:none;user-select:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}' +
     '.off{opacity:0;pointer-events:none}' +
     'button{all:unset;width:36px;height:36px;border-radius:50%;text-align:center;line-height:36px;font-size:15px;font-weight:600;color:#fff;cursor:pointer;touch-action:manipulation}' +
     'button:active{background:rgba(255,255,255,.18)}.play{background:#0a5cff}' +
-    'span{min-width:3.4em;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
-    'i{width:1px;height:18px;background:rgba(255,255,255,.25);margin:0 2px}';
+    'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
+    'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}';
   // Some sites block style tags. A constructed style sheet still works there.
   try {
     var sheet = new CSSStyleSheet();
@@ -66,13 +71,13 @@
 
   el('button', '✕', 'Close', stop);
   el('i');
-  el('button', '−', 'Slower', function () { speed = Math.max(MIN, speed - STEP); update(); });
+  el('button', '+', 'Faster', function () { si = Math.min(SPEEDS.length - 1, si + 1); update(); });
   var speedOut = el('span');
-  el('button', '+', 'Faster', function () { speed = Math.min(MAX, speed + STEP); update(); });
+  el('button', '−', 'Slower', function () { si = Math.max(0, si - 1); update(); });
   el('i');
-  el('button', 'A−', 'Smaller', function () { size = Math.max(40, size - 10); update(); });
-  var sizeOut = el('span');
   el('button', 'A+', 'Larger', function () { size = Math.min(300, size + 10); update(); });
+  var sizeOut = el('span');
+  el('button', 'A−', 'Smaller', function () { size = Math.max(40, size - 10); update(); });
   el('i');
   var play = el('button', '▶', 'Start scrolling', function () { setPlay(!on); });
   play.className = 'play';
@@ -83,12 +88,14 @@
     hideT = setTimeout(function () { bar.classList.add('off'); }, HIDE_AFTER);
   }
 
+  function short(n) { return n >= 10000 ? n / 1000 + 'k' : String(n); }
+
   function update() {
-    speedOut.textContent = speed;
+    speedOut.textContent = short(SPEEDS[si]);
     sizeOut.textContent = size + '%';
     document.documentElement.style.zoom = size === 100 ? '' : size / 100;
     host.style.zoom = size === 100 ? '' : 100 / size;
-    save('scroller-pps', speed);
+    save('scroller-pps', SPEEDS[si]);
     save('scroller-size', size);
   }
 
@@ -103,6 +110,23 @@
     if (document.visibilityState === 'visible' && on) wake(true);
   }
 
+  // Many sites turn on smooth scrolling. That makes each small step a slow
+  // animation, so the code turns it off while the page scrolls.
+  var smooth = [];
+  function instant(v) {
+    if (v) {
+      [document.documentElement, document.body, tgt].forEach(function (e) {
+        if (e && smooth.indexOf(e) < 0) {
+          smooth.push(e);
+          e.style.setProperty('scroll-behavior', 'auto', 'important');
+        }
+      });
+    } else {
+      smooth.forEach(function (e) { e.style.removeProperty('scroll-behavior'); });
+      smooth = [];
+    }
+  }
+
   function getY() { return tgt === root ? window.scrollY : tgt.scrollTop; }
   function setY(y) { if (tgt === root) window.scrollTo(0, y); else tgt.scrollTop = y; }
   function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
@@ -111,8 +135,11 @@
     on = v; last = 0;
     if (on) {
       tgt = pick() || root;
-      pos = lastSet = getY();
+      instant(true);
+      pos = getY();
       atEnd = 0;
+    } else {
+      instant(false);
     }
     play.textContent = on ? '❚❚' : '▶';
     play.setAttribute('aria-label', on ? 'Stop scrolling' : 'Start scrolling');
@@ -125,10 +152,14 @@
       setPlay(!on);
     }
   }
+  // When you scroll by hand, scrolling continues from your new place.
+  function onHand() { byHand = true; }
 
   // Any touch shows the buttons. They fade again after a few seconds.
   var touches = ['pointerdown', 'touchstart', 'keydown'];
+  var hands = ['touchmove', 'wheel'];
   touches.forEach(function (t) { document.addEventListener(t, show, { capture: true, passive: true }); });
+  hands.forEach(function (t) { document.addEventListener(t, onHand, { capture: true, passive: true }); });
   document.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', onVisible);
   bar.addEventListener('click', show);
@@ -140,13 +171,10 @@
       last = ts;
       // Skip long gaps (Safari was in the background), so the page does not jump.
       if (dt > 0 && dt < 250) {
-        // If you scrolled by hand, continue from there.
-        var y = getY();
-        if (Math.abs(y - lastSet) > 40) pos = y;
+        if (byHand) { pos = getY(); byHand = false; }
         var max = maxY();
-        pos = Math.min(pos + speed * dt / 1000, max);
+        pos = Math.min(pos + SPEEDS[si] * dt / 1000, max);
         setY(pos);
-        lastSet = pos;
         // Stop when the page stays at the end for 3 seconds.
         // The wait lets pages that load more images at the bottom continue.
         atEnd = pos >= max - 1 ? atEnd + dt : 0;
@@ -161,6 +189,7 @@
     alive = false;
     clearTimeout(hideT);
     touches.forEach(function (t) { document.removeEventListener(t, show, { capture: true }); });
+    hands.forEach(function (t) { document.removeEventListener(t, onHand, { capture: true }); });
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVisible);
     document.documentElement.style.zoom = '';

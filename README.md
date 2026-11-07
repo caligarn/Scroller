@@ -18,9 +18,9 @@ You can also add the Scroller page to your Home Screen (**Share**, then **Add to
 ## Use it
 
 1. Open a manga page in Safari.
-2. Tap **Scroller** in the Favorites bar. A small bar shows at the bottom.
+2. Tap **Scroller** in the Favorites bar. A small bar shows on the left side.
 3. Tap **▶** to start. Tap **❚❚** to stop.
-4. Use **− +** to change the speed. Use **A− A+** to change the size.
+4. Use **+ −** to change the speed, from 20 to 100,000 points per second (shown as 100k). Use **A+ A−** to change the size.
 5. Tap **✕**, or tap **Scroller** again, to remove the bar.
 
 The buttons fade away after 3 seconds. Tap the page to show them again. The page stops at the end.
