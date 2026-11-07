@@ -10,8 +10,13 @@
   function load(k, d) { try { return +localStorage.getItem(k) || d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  var speed = load('scroller-speed', 60), size = load('scroller-size', 100);
-  var on = false, alive = true, last = 0, acc = 0, lock = null, hideT = 0, tgt = null;
+  // Speed is in screen points per second.
+  var MIN = 20, MAX = 1000, STEP = 20;
+  var speed = load('scroller-pps', 120), size = load('scroller-size', 100);
+  var on = false, alive = true, last = 0, lock = null, hideT = 0, tgt = null;
+  // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
+  var pos = 0, lastSet = 0, atEnd = 0;
+  var root = document.scrollingElement || document.documentElement;
 
   // Find the part of the page that scrolls.
   function pick() {
@@ -20,7 +25,6 @@
       var g = el.scrollHeight - el.clientHeight;
       if (g > gap && el.clientHeight > innerHeight * 0.5 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { best = el; gap = g; }
     });
-    var root = document.scrollingElement || document.documentElement;
     return (root.scrollHeight - root.clientHeight >= gap) ? root : best;
   }
 
@@ -62,9 +66,9 @@
 
   el('button', '✕', 'Close', stop);
   el('i');
-  el('button', '−', 'Slower', function () { speed = Math.max(10, speed - 10); update(); });
+  el('button', '−', 'Slower', function () { speed = Math.max(MIN, speed - STEP); update(); });
   var speedOut = el('span');
-  el('button', '+', 'Faster', function () { speed = Math.min(400, speed + 10); update(); });
+  el('button', '+', 'Faster', function () { speed = Math.min(MAX, speed + STEP); update(); });
   el('i');
   el('button', 'A−', 'Smaller', function () { size = Math.max(40, size - 10); update(); });
   var sizeOut = el('span');
@@ -84,7 +88,7 @@
     sizeOut.textContent = size + '%';
     document.documentElement.style.zoom = size === 100 ? '' : size / 100;
     host.style.zoom = size === 100 ? '' : 100 / size;
-    save('scroller-speed', speed);
+    save('scroller-pps', speed);
     save('scroller-size', size);
   }
 
@@ -99,9 +103,17 @@
     if (document.visibilityState === 'visible' && on) wake(true);
   }
 
+  function getY() { return tgt === root ? window.scrollY : tgt.scrollTop; }
+  function setY(y) { if (tgt === root) window.scrollTo(0, y); else tgt.scrollTop = y; }
+  function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
+
   function setPlay(v) {
     on = v; last = 0;
-    if (on) tgt = pick();
+    if (on) {
+      tgt = pick() || root;
+      pos = lastSet = getY();
+      atEnd = 0;
+    }
     play.textContent = on ? '❚❚' : '▶';
     play.setAttribute('aria-label', on ? 'Stop scrolling' : 'Start scrolling');
     wake(on);
@@ -124,19 +136,22 @@
   function tick(ts) {
     if (!alive) return;
     if (on && tgt) {
-      // Skip long gaps (Safari was in the background), so the page does not jump.
-      if (last && ts - last < 250) {
-        acc += speed * (ts - last) / 1000;
-        var d = Math.floor(acc);
-        if (d > 0) {
-          var before = tgt.scrollTop;
-          tgt.scrollTop += d;
-          acc -= d;
-          // Stop at the end of the page.
-          if (tgt.scrollTop === before && before > 0) setPlay(false);
-        }
-      }
+      var dt = last ? ts - last : 0;
       last = ts;
+      // Skip long gaps (Safari was in the background), so the page does not jump.
+      if (dt > 0 && dt < 250) {
+        // If you scrolled by hand, continue from there.
+        var y = getY();
+        if (Math.abs(y - lastSet) > 40) pos = y;
+        var max = maxY();
+        pos = Math.min(pos + speed * dt / 1000, max);
+        setY(pos);
+        lastSet = pos;
+        // Stop when the page stays at the end for 3 seconds.
+        // The wait lets pages that load more images at the bottom continue.
+        atEnd = pos >= max - 1 ? atEnd + dt : 0;
+        if (atEnd > 3000) setPlay(false);
+      }
     }
     requestAnimationFrame(tick);
   }
