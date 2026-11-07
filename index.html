@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scroll Reader</title>
+
+<!-- Home Screen app (iPad and iPhone) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scroller">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16171a" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f3f4f6; --ink:#000; --sub:#55585f; --line:#d4d6db;
+  --bar:#ffffff; --accent:#0a5cff; --accent-ink:#fff; --dot:rgba(0,0,0,.13);
+  color-scheme:light;
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#000; --ink:#f2f2f2; --sub:#a0a3aa; --line:#2c2e33;
+    --bar:#16171a; --accent:#5b93ff; --accent-ink:#000; --dot:rgba(255,255,255,.12);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#000; --ink:#f2f2f2; --sub:#a0a3aa; --line:#2c2e33;
+  --bar:#16171a; --accent:#5b93ff; --accent-ink:#000; --dot:rgba(255,255,255,.12);
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{height:100dvh;background:var(--paper);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;overflow:hidden;-webkit-tap-highlight-color:transparent}
+button,input{font:inherit;color:inherit}
+button{touch-action:manipulation}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* Top: address */
+.top{display:flex;gap:8px;background:var(--bar);border-bottom:1px solid var(--line);
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 10px max(12px,env(safe-area-inset-left))}
+.top input{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);font-size:16px}
+.btn{border:0;border-radius:10px;padding:10px 16px;min-height:44px;background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+
+.hint{padding:10px 14px;background:var(--bar);border-bottom:1px solid var(--line);font-size:.9rem;line-height:1.5}
+
+/* Reader */
+#view{flex:1;overflow:auto;position:relative;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+#stage{position:relative;transform-origin:0 0}
+#frame{border:0;display:block;transform-origin:0 0;background:#fff}
+
+/* Empty state */
+.empty{min-height:100%;display:grid;place-items:center;padding:32px 20px;
+  background-image:radial-gradient(var(--dot) 1.2px,transparent 1.6px);background-size:9px 9px}
+.card{max-width:34rem;background:var(--paper);padding:24px;border:2px solid var(--ink);border-radius:4px}
+.card h1{font-weight:900;font-size:clamp(1.9rem,7vw,2.6rem);line-height:1.05;margin:0 0 12px;letter-spacing:-.01em}
+.card h2{font-size:1.05rem;margin:20px 0 8px}
+.card p{margin:0 0 12px;line-height:1.6;color:var(--sub)}
+.card p strong,.card li strong{color:var(--ink)}
+.card ol{margin:0 0 16px;padding-left:1.3em;line-height:1.6}
+.bm{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.bm a{display:inline-flex;align-items:center;min-height:44px;padding:10px 14px;border:2px dashed var(--accent);border-radius:10px;color:var(--accent);font-weight:700;text-decoration:none}
+textarea{width:100%;height:84px;margin-top:10px;font:12px/1.4 ui-monospace,Menlo,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--bar);color:var(--sub)}
+.note{font-size:.9rem}
+
+/* Bottom controls */
+.ctrl{display:grid;grid-template-columns:auto 1fr;gap:10px 16px;align-items:center;background:var(--bar);border-top:1px solid var(--line);
+  padding:12px max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  -webkit-user-select:none;user-select:none}
+#play{width:68px;height:68px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);font-size:1.5rem;cursor:pointer;grid-row:span 2}
+.row{display:flex;align-items:center;gap:10px}
+.row label{width:3.6rem;font-weight:700;font-size:.95rem}
+.row input[type=range]{flex:1;min-width:0;height:44px;accent-color:var(--accent)}
+.row output{width:4.6rem;text-align:right;font-variant-numeric:tabular-nums;color:var(--sub);font-size:.95rem}
+.step{width:44px;height:44px;flex:none;border-radius:10px;border:1px solid var(--line);background:transparent;cursor:pointer;font-weight:700;font-size:1.2rem}
+.hidden{display:none!important}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<form class="top" id="go">
+  <input id="url" type="url" inputmode="url" autocomplete="url" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste a web address" aria-label="Web address">
+  <button class="btn" id="open" type="submit">Open</button>
+  <button class="btn ghost hidden" id="close" type="button" aria-label="Close page">Close</button>
+</form>
+
+<div id="hint" class="hint hidden">Page blank? This site does not let the app show it. Tap <strong>Close</strong> and use the bookmark version in Safari. It works on every site.</div>
+<main id="view">
+  <section class="empty" id="empty">
+    <div class="card">
+      <h1>Read hands-free.</h1>
+      <p>Paste a web address above. The page scrolls by itself. You set the speed and the size.</p>
+      <ol>
+        <li>Paste the address and tap <strong>Open</strong>.</li>
+        <li>Tap the round button to start or stop.</li>
+        <li>Move <strong>Speed</strong> and <strong>Size</strong> to adjust.</li>
+      </ol>
+      <p class="note">Some sites do not let other pages show them. Most manga sites do this. If a page stays blank, use the bookmark below. It works on every site.</p>
+
+      <h2>Bookmark version</h2>
+      <p><strong>On iPad:</strong></p>
+      <ol>
+        <li>Tap <strong>Copy code</strong>.</li>
+        <li>In Safari, tap the Share button, then <strong>Add to Favorites</strong>.</li>
+        <li>Open your bookmarks. Tap <strong>Edit</strong>, then tap the new bookmark.</li>
+        <li>Name it <strong>Auto-Scroll</strong>. Delete the address and paste the code.</li>
+        <li>On a manga page, tap the address bar, then tap <strong>Auto-Scroll</strong>.</li>
+      </ol>
+      <p><strong>On a computer:</strong> drag the dashed button to your bookmarks bar.</p>
+      <div class="bm">
+        <a id="bmlink" href="#">Auto-Scroll</a>
+        <button class="btn ghost" id="copy" type="button">Copy code</button>
+      </div>
+      <textarea id="bmcode" readonly aria-label="Bookmark code"></textarea>
+    </div>
+  </section>
+  <div id="stage" class="hidden"><iframe id="frame" title="Page you are reading" referrerpolicy="no-referrer"></iframe></div>
+</main>
+
+<div class="ctrl">
+  <button id="play" type="button" aria-label="Start scrolling">▶</button>
+  <div class="row">
+    <label for="speed">Speed</label>
+    <button class="step" data-t="speed" data-d="-5" type="button" aria-label="Slower">−</button>
+    <input id="speed" type="range" min="5" max="400" step="5" value="60">
+    <button class="step" data-t="speed" data-d="5" type="button" aria-label="Faster">+</button>
+    <output id="speedOut"></output>
+  </div>
+  <div class="row">
+    <label for="zoom">Size</label>
+    <button class="step" data-t="zoom" data-d="-10" type="button" aria-label="Smaller">−</button>
+    <input id="zoom" type="range" min="40" max="300" step="10" value="100">
+    <button class="step" data-t="zoom" data-d="10" type="button" aria-label="Larger">+</button>
+    <output id="zoomOut"></output>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var view=$('view'), stage=$('stage'), frame=$('frame'), empty=$('empty');
+  var speed=$('speed'), zoom=$('zoom'), play=$('play');
+  var PAGE_H = 60000; // tall frame so the outer box can scroll it
+  var on=false, last=0, acc=0, lock=null;
+
+  function load(k,d){ try{ var v=localStorage.getItem(k); return v===null?d:v; }catch(e){ return d; } }
+  function save(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+  speed.value = load('sr-speed', 60);
+  zoom.value  = load('sr-zoom', 100);
+  $('url').value = load('sr-url', '');
+
+  function layout(){
+    var z = zoom.value/100;
+    var w = Math.max(200, Math.round(view.clientWidth / z));
+    frame.style.width = w+'px';
+    frame.style.height = PAGE_H+'px';
+    frame.style.transform = 'scale('+z+')';
+    stage.style.width = (w*z)+'px';
+    stage.style.height = (PAGE_H*z)+'px';
+  }
+  function labels(){
+    $('speedOut').textContent = speed.value+' px/s';
+    $('zoomOut').textContent = zoom.value+'%';
+  }
+  speed.oninput = function(){ labels(); save('sr-speed', speed.value); };
+  zoom.oninput = function(){
+    var ratio = view.scrollTop / Math.max(1, stage.offsetHeight);
+    labels(); layout(); save('sr-zoom', zoom.value);
+    view.scrollTop = ratio * stage.offsetHeight;
+  };
+  document.querySelectorAll('.step').forEach(function(b){
+    b.onclick = function(){
+      var el = $(b.dataset.t);
+      el.value = Math.min(+el.max, Math.max(+el.min, +el.value + +b.dataset.d));
+      el.oninput();
+    };
+  });
+
+  /* Keep the screen on while it scrolls */
+  function wake(v){
+    try{
+      if(v && navigator.wakeLock){
+        navigator.wakeLock.request('screen').then(function(l){ lock=l; }, function(){});
+      } else if(!v && lock){ lock.release(); lock=null; }
+    }catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible' && on) wake(true);
+  });
+
+  function setPlay(v){
+    on=v; last=0;
+    play.textContent = on ? '❚❚' : '▶';
+    play.setAttribute('aria-label', on ? 'Stop scrolling' : 'Start scrolling');
+    wake(on);
+  }
+  play.onclick = function(){ setPlay(!on); };
+  document.addEventListener('keydown', function(e){
+    if(e.target.tagName==='INPUT' && e.target.type!=='range') return;
+    if(e.code==='Space'){ e.preventDefault(); setPlay(!on); }
+  });
+
+  function tick(ts){
+    if(on){
+      // Skip big gaps (app was in the background) so the page does not jump.
+      if(last && ts-last < 250){
+        acc += speed.value * (ts-last) / 1000;
+        var d = Math.floor(acc);
+        if(d>0){
+          var before = view.scrollTop;
+          view.scrollTop += d; acc -= d;
+          if(view.scrollTop===before && view.scrollTop>0) setPlay(false);
+        }
+      }
+      last = ts;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  function open(){
+    var u = $('url').value.trim();
+    if(!u) return;
+    if(!/^https?:\/\//i.test(u)) u = 'https://'+u;
+    $('url').value = u; save('sr-url', u);
+    $('url').blur();
+    empty.classList.add('hidden'); stage.classList.remove('hidden');
+    $('close').classList.remove('hidden');
+    $('hint').classList.remove('hidden');
+    frame.src = u; view.scrollTop = 0; layout();
+  }
+  $('go').onsubmit = function(e){ e.preventDefault(); open(); return false; };
+  $('close').onclick = function(){
+    setPlay(false); frame.src='about:blank';
+    stage.classList.add('hidden'); empty.classList.remove('hidden');
+    $('close').classList.add('hidden'); $('hint').classList.add('hidden'); view.scrollTop=0;
+  };
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', function(){ setTimeout(layout, 300); });
+
+  /* Bookmark version: runs inside any site. No // comments inside this function. */
+  function bm(){
+    if(window.__asr){ window.__asr.remove(); window.__asr=null; return; }
+    var s=60, z=1, on=false, acc=0, last=0, wl=null;
+    try{ s=+localStorage.getItem('__asr_s')||60; }catch(e){}
+    function pick(){
+      var best=null, gap=0;
+      document.querySelectorAll('*').forEach(function(el){
+        var cs=getComputedStyle(el), g=el.scrollHeight-el.clientHeight;
+        if(g>gap && el.clientHeight>innerHeight*0.5 && /(auto|scroll)/.test(cs.overflowY)){ best=el; gap=g; }
+      });
+      var root=document.scrollingElement||document.documentElement;
+      return (root.scrollHeight-root.clientHeight >= gap) ? root : best;
+    }
+    function wake(v){ try{ if(v&&navigator.wakeLock){ navigator.wakeLock.request('screen').then(function(l){wl=l;},function(){}); } else if(!v&&wl){ wl.release(); wl=null; } }catch(e){} }
+    var tgt=pick();
+    var p=document.createElement('div'); window.__asr=p;
+    p.style.cssText='position:fixed;z-index:2147483647;left:50%;bottom:max(14px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:8px;background:rgba(15,15,18,.92);border-radius:16px;font:600 16px system-ui,sans-serif;color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.35);-webkit-user-select:none;user-select:none';
+    function b(t,f){ var e=document.createElement('button'); e.textContent=t; e.style.cssText='all:unset;cursor:pointer;min-width:28px;text-align:center;padding:12px 12px;background:#2b2d33;border-radius:10px;color:#fff;touch-action:manipulation'; e.onclick=f; p.appendChild(e); return e; }
+    var lab=document.createElement('span'); lab.style.cssText='padding:0 6px;font-variant-numeric:tabular-nums;white-space:nowrap';
+    function u(){ lab.textContent=s+' px/s · '+Math.round(z*100)+'%'; p.style.zoom=1/z; try{ localStorage.setItem('__asr_s',s); }catch(e){} }
+    function setOn(v){ on=v; last=0; pb.textContent=on?'❚❚':'▶'; wake(on); }
+    var pb=b('▶',function(){ setOn(!on); });
+    b('−',function(){ s=Math.max(5,s-10); u(); });
+    p.appendChild(lab);
+    b('+',function(){ s=Math.min(600,s+10); u(); });
+    b('A−',function(){ z=Math.max(.4,Math.round((z-.1)*10)/10); document.documentElement.style.zoom=z; u(); });
+    b('A+',function(){ z=Math.min(3,Math.round((z+.1)*10)/10); document.documentElement.style.zoom=z; u(); });
+    b('✕',function(){ setOn(false); p.remove(); window.__asr=null; document.documentElement.style.zoom=''; });
+    u(); document.body.appendChild(p);
+    function t(ts){
+      if(window.__asr!==p) return;
+      if(on){
+        if(last && ts-last<250){ acc+=s*(ts-last)/1000; var d=Math.floor(acc); if(d>0){ var before=tgt.scrollTop; tgt.scrollTop+=d; acc-=d; if(tgt.scrollTop===before && before>0) setOn(false); } }
+        last=ts;
+      }
+      requestAnimationFrame(t);
+    }
+    requestAnimationFrame(t);
+  }
+  var code = 'javascript:' + encodeURIComponent('(' + bm.toString().replace(/\s+/g,' ') + ')()');
+  $('bmcode').value = code;
+  $('bmlink').setAttribute('href', code);
+  $('bmlink').onclick = function(e){ e.preventDefault(); };
+  $('copy').onclick = function(){
+    var ta=$('bmcode');
+    var done=function(){ $('copy').textContent='Copied'; setTimeout(function(){ $('copy').textContent='Copy code'; },1600); };
+    var pick=function(){ ta.focus(); ta.setSelectionRange(0, ta.value.length); try{ if(document.execCommand('copy')) done(); }catch(e){} };
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done, pick); }
+    else { pick(); }
+  };
+
+  /* Works offline after the first visit */
+  if('serviceWorker' in navigator && location.protocol==='https:'){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+
+  labels(); layout();
+})();
+</script>
+</body>
+</html>
