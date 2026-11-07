@@ -31,6 +31,7 @@ button{touch-action:manipulation;cursor:pointer}
 .field input{flex:1;min-width:0;padding:12px 14px;font-size:17px;border:1px solid var(--line);border-radius:12px;background:var(--field)}
 .field button{padding:0 20px;border:0;border-radius:12px;background:var(--accent);color:#fff;font-weight:700}
 #start p{margin:14px 2px 0;color:var(--sub);font-size:.9rem;line-height:1.5}
+#start a{color:var(--accent);font-weight:600}
 
 /* Reader */
 #view{height:100%;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -60,7 +61,7 @@ button{touch-action:manipulation;cursor:pointer}
       <input id="url" type="url" inputmode="url" autocomplete="url" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="Paste a web address" aria-label="Web address">
       <button type="submit">Open</button>
     </div>
-    <p>The page scrolls by itself. Tap the page to show the buttons. Some sites do not let other apps show them. Those pages stay blank.</p>
+    <p>The page scrolls by itself. Tap the page to show the buttons. Some sites do not let other apps show them. Those pages stay blank. <a href="#" id="test">Open the test page</a> to check the app.</p>
   </form>
 </section>
 
@@ -104,7 +105,7 @@ button{touch-action:manipulation;cursor:pointer}
     var z = set.size/100, w = Math.max(200, Math.round(view.clientWidth / z));
     frame.style.width = w+'px';
     frame.style.height = PAGE_H+'px';
-    frame.style.transform = 'scale('+z+')';
+    frame.style.transform = z===1 ? 'none' : 'scale('+z+')';
     stage.style.width = (w*z)+'px';
     stage.style.height = (PAGE_H*z)+'px';
   }
@@ -173,15 +174,19 @@ button{touch-action:manipulation;cursor:pointer}
   }
   requestAnimationFrame(tick);
 
+  function open(u){
+    $('start').classList.add('hidden');
+    view.classList.remove('hidden'); ctrl.classList.remove('hidden');
+    frame.src = u; layout(); view.scrollTop = 0; show();
+  }
+  $('test').onclick = function(e){ e.preventDefault(); open('test.html'); };
   $('go').onsubmit = function(e){
     e.preventDefault();
     var u = $('url').value.trim();
     if(!u) return;
     if(!/^https?:\/\//i.test(u)) u = 'https://'+u;
     $('url').value = u; save('sr-url', u); $('url').blur();
-    $('start').classList.add('hidden');
-    view.classList.remove('hidden'); ctrl.classList.remove('hidden');
-    frame.src = u; layout(); view.scrollTop = 0; show();
+    open(u);
   };
   $('close').onclick = function(){
     setPlay(false); frame.src = 'about:blank';
