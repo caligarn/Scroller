@@ -42,17 +42,15 @@ When the page reaches the bottom, Scroller waits until the images there have loa
 
 Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
 
-On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites add their images with their own code. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and auto-resume starts it. Scroller also opens a new page if the site does not answer in 15 seconds.
+On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites add their images with their own code. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and it starts playing. Scroller also opens a new page if the site does not answer in 15 seconds.
 
 Scroller does not go to the next chapter when something holds the page in place (for example a popup), or when image slider buttons say "next".
 
 If a site picks the wrong link, turn **Next** off on that site.
 
-### Auto-resume
+### New page or refresh
 
-A bookmark runs only on the page that is open. When Safari opens a new page, the bar goes away. Tap **Scroller** again on the new page. If it was playing on the last page, it starts at once, with the same mode, speed, and direction.
-
-Auto-resume stays on when the page stops by itself at the end. It turns off when you tap **❚❚**, tap **✕**, or tap **Scroller** to remove the bar. It also turns off after 30 minutes.
+A bookmark runs only on the page that is open. When Safari opens a new page, or you refresh, the bar goes away. Tap **Scroller** again. It starts playing at once, with the same mode, speed, direction, and size. Tap **❚❚** if you want to read without scrolling.
 
 To check your bookmark, open `test.html` (for example `https://scroller-hw96.vercel.app/test.html`) and tap **Scroller**.
 

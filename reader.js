@@ -4,9 +4,8 @@
 (function () {
   if (window.__scroller) { window.__scroller.stop(); return; }
 
-  // Auto-resume: when you tap the bookmark on the next page, Scroller starts
-  // at once if it was playing on this site in the last 30 minutes.
-  var RESUME_FOR = 30 * 60 * 1000;
+  // Tapping the bookmark starts playing at once, with the saved settings.
+  // Tap the pause button to read without scrolling.
 
   // Speeds in screen points per second. The steps get larger as the speed goes up.
   var SPEEDS = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500, 600, 800,
@@ -176,7 +175,6 @@
   }
   function onVisible() {
     if (document.visibilityState === 'visible' && on) wake(true);
-    if (document.visibilityState === 'hidden') onLeave();
   }
 
   // Many sites turn on smooth scrolling or "snap" scrolling. Smooth scrolling makes
@@ -342,7 +340,6 @@
       loadNext(next.url);
     } else {
       // A button that runs the site's own code. Tap it, as you would.
-      save('scroller-resume', Date.now());
       var before = location.href;
       loading = true;
       clicked.push(next.el);
@@ -378,9 +375,8 @@
     });
   }
 
-  // Open the next chapter as a new page. Auto-resume starts it when you tap the bookmark.
+  // Open the next chapter as a new page. Tap the bookmark there, and it starts playing.
   function openNext(url) {
-    save('scroller-resume', Date.now());
     location.href = url;
   }
 
@@ -445,7 +441,6 @@
       if (e && e.message === 'none') {
         say('No next chapter');
         setPlay(false);
-        save('scroller-resume', Date.now());
       } else {
         openNext(url);
       }
@@ -467,14 +462,9 @@
     wake(on);
   }
 
-  // You start or stop. This also turns auto-resume on or off.
+  // Start or stop.
   function toggle() {
     setPlay(!on);
-    save('scroller-resume', on ? Date.now() : 0);
-  }
-  // Leaving the page while playing keeps auto-resume on for the next page.
-  function onLeave() {
-    if (on) save('scroller-resume', Date.now());
   }
 
   function onKey(e) {
@@ -490,7 +480,6 @@
   hands.forEach(function (t) { document.addEventListener(t, onHand, { capture: true, passive: true }); });
   document.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', onVisible);
-  window.addEventListener('pagehide', onLeave);
 
   function tick(ts) {
     if (!alive) return;
@@ -551,12 +540,11 @@
           if (!edge) pendWait = 0;
         }
         // Wait a short time at the end. Then go to the next chapter.
-        // If there is none, stop. Auto-resume stays on.
+        // If there is none, stop.
         if (atEnd > END_WAIT) {
           resetEnd();
           if (!(dir > 0 && autoNext && goNext())) {
             setPlay(false);
-            save('scroller-resume', Date.now());
           }
         }
       }
@@ -564,12 +552,10 @@
     requestAnimationFrame(tick);
   }
 
-  // Close (the close button, or a second tap on the bookmark). Auto-resume turns off.
+  // Close (the close button, or a second tap on the bookmark).
   function stop() {
     setPlay(false);
-    save('scroller-resume', 0);
     alive = false;
-    window.removeEventListener('pagehide', onLeave);
     hands.forEach(function (t) { document.removeEventListener(t, onHand, { capture: true }); });
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVisible);
@@ -582,9 +568,6 @@
   (document.body || document.documentElement).appendChild(host);
   update();
   requestAnimationFrame(tick);
-  var since = Date.now() - load('scroller-resume', 0);
-  if (since >= 0 && since < RESUME_FOR) {
-    // Wait a moment, so the new page can finish its layout.
-    setTimeout(function () { if (alive && !on) setPlay(true); }, 500);
-  }
+  // Start playing. Wait a moment first, so the page can finish its layout.
+  setTimeout(function () { if (alive && !on) setPlay(true); }, 500);
 })();
