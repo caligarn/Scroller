@@ -11,12 +11,24 @@
   var SPEEDS = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500, 600, 800,
     1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000];
 
+  // Page mode: wait times in seconds between jumps.
+  var WAITS = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 45, 60];
+  // Each jump moves this part of the screen. The last line stays in view.
+  var JUMP = 0.9;
+
   function load(k, d) { try { return +localStorage.getItem(k) || d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
 
-  // Start at the saved speed, or the nearest speed in the list.
-  var saved = load('scroller-pps', 120), si = 0;
-  SPEEDS.forEach(function (v, i) { if (Math.abs(v - saved) < Math.abs(SPEEDS[si] - saved)) si = i; });
+  // Start at the saved value, or the nearest value in the list.
+  function nearest(list, v) {
+    var n = 0;
+    list.forEach(function (x, i) { if (Math.abs(x - v) < Math.abs(list[n] - v)) n = i; });
+    return n;
+  }
+  var si = nearest(SPEEDS, load('scroller-pps', 120));
+  var wi = nearest(WAITS, load('scroller-wait', 1));
+  // mode is 'scroll' (smooth) or 'page' (jump, then pause).
+  var mode = load('scroller-page', 0) ? 'page' : 'scroll', waited = 0;
   var size = load('scroller-size', 100);
   var on = false, alive = true, last = 0, lock = null, hideT = 0, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
@@ -44,6 +56,7 @@
     '.off{opacity:0;pointer-events:none}' +
     'button{all:unset;width:36px;height:36px;border-radius:50%;text-align:center;line-height:36px;font-size:15px;font-weight:600;color:#fff;cursor:pointer;touch-action:manipulation}' +
     'button:active{background:rgba(255,255,255,.18)}.play{background:#0a5cff}' +
+    '.mode{width:40px;height:26px;line-height:26px;border-radius:13px;font-size:11px;background:rgba(255,255,255,.14)}' +
     'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
     'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}';
   // Some sites block style tags. A constructed style sheet still works there.
@@ -71,9 +84,22 @@
 
   el('button', '✕', 'Close', stop);
   el('i');
-  el('button', '+', 'Faster', function () { si = Math.min(SPEEDS.length - 1, si + 1); update(); });
+  var modeBtn = el('button', '', '', function () {
+    mode = mode === 'scroll' ? 'page' : 'scroll';
+    waited = 0; pos = tgt ? getY() : 0;
+    update();
+  });
+  modeBtn.className = 'mode';
+  // + makes the number larger. In Scroll mode it is the speed. In Page mode it is the wait in seconds.
+  el('button', '+', 'Increase', function () {
+    if (mode === 'page') wi = Math.min(WAITS.length - 1, wi + 1); else si = Math.min(SPEEDS.length - 1, si + 1);
+    update();
+  });
   var speedOut = el('span');
-  el('button', '−', 'Slower', function () { si = Math.max(0, si - 1); update(); });
+  el('button', '−', 'Decrease', function () {
+    if (mode === 'page') wi = Math.max(0, wi - 1); else si = Math.max(0, si - 1);
+    update();
+  });
   el('i');
   el('button', 'A+', 'Larger', function () { size = Math.min(300, size + 10); update(); });
   var sizeOut = el('span');
@@ -91,11 +117,16 @@
   function short(n) { return n >= 10000 ? n / 1000 + 'k' : String(n); }
 
   function update() {
-    speedOut.textContent = short(SPEEDS[si]);
+    var page = mode === 'page';
+    modeBtn.textContent = page ? 'Page' : 'Scroll';
+    modeBtn.setAttribute('aria-label', page ? 'Page mode. Tap for Scroll mode' : 'Scroll mode. Tap for Page mode');
+    speedOut.textContent = page ? WAITS[wi] + 's' : short(SPEEDS[si]);
     sizeOut.textContent = size + '%';
     document.documentElement.style.zoom = size === 100 ? '' : size / 100;
     host.style.zoom = size === 100 ? '' : 100 / size;
     save('scroller-pps', SPEEDS[si]);
+    save('scroller-wait', WAITS[wi]);
+    save('scroller-page', page ? 1 : 0);
     save('scroller-size', size);
   }
 
@@ -129,6 +160,8 @@
 
   function getY() { return tgt === root ? window.scrollY : tgt.scrollTop; }
   function setY(y) { if (tgt === root) window.scrollTo(0, y); else tgt.scrollTop = y; }
+  // The visible height of the part that scrolls.
+  function screenH() { return tgt === root ? innerHeight : tgt.clientHeight; }
   function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
 
   function setPlay(v) {
@@ -138,6 +171,7 @@
       instant(true);
       pos = getY();
       atEnd = 0;
+      waited = 0;
     } else {
       instant(false);
     }
@@ -173,8 +207,18 @@
       if (dt > 0 && dt < 250) {
         if (byHand) { pos = getY(); byHand = false; }
         var max = maxY();
-        pos = Math.min(pos + SPEEDS[si] * dt / 1000, max);
-        setY(pos);
+        if (mode === 'page') {
+          // Wait, then jump down one screen.
+          waited += dt;
+          if (waited >= WAITS[wi] * 1000) {
+            waited = 0;
+            pos = Math.min(getY() + screenH() * JUMP, max);
+            setY(pos);
+          }
+        } else {
+          pos = Math.min(pos + SPEEDS[si] * dt / 1000, max);
+          setY(pos);
+        }
         // Stop when the page stays at the end for 3 seconds.
         // The wait lets pages that load more images at the bottom continue.
         atEnd = pos >= max - 1 ? atEnd + dt : 0;
