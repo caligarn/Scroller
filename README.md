@@ -30,7 +30,7 @@ You can also add the Scroller page to your Home Screen (**Share**, then **Add to
 Tap the mode button (**Scroll** or **Page**) to change the mode.
 
 - **Scroll:** the page moves smoothly. **+ −** change the speed.
-- **Page:** the page jumps down one screen, then waits. **+ −** change the wait, from 0.5 to 60 seconds. Each jump is 90% of the screen, so the bottom line stays in view at the top.
+- **Page:** the page jumps down one screen, then waits. **+ −** change the wait, from 0.25 to 60 seconds. The steps are 0.25 seconds up to 3 seconds, 0.5 seconds up to 6 seconds, and 1 second up to 12 seconds. Each jump is 90% of the screen, so the bottom line stays in view at the top.
 
 Scroller remembers your mode, direction, speed, wait, and size on each site.
 

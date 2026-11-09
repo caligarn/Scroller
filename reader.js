@@ -12,7 +12,9 @@
     1000, 1500, 2000, 3000, 4000, 5000, 7500, 10000, 15000, 20000, 30000, 50000, 75000, 100000];
 
   // Page mode: wait times in seconds between jumps.
-  var WAITS = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 45, 60];
+  // Steps of 0.25 s up to 3 s, 0.5 s up to 6 s, 1 s up to 12 s, then larger.
+  var WAITS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.5, 4, 4.5, 5, 5.5, 6,
+    7, 8, 9, 10, 11, 12, 15, 20, 25, 30, 45, 60];
   // Each jump moves this part of the screen. The last line stays in view.
   var JUMP = 0.9;
 
