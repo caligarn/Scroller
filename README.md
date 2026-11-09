@@ -38,7 +38,9 @@ The page stops at the end (or at the top, when it moves up).
 
 ### Next chapter
 
-When the page reaches the end, Scroller looks for the site's "next chapter" link and goes on by itself. It skips "Previous" and "Back" links. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
+When the page reaches the bottom, Scroller waits 1.5 seconds (so images at the bottom can load), then goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds none, it stops and shows "No next chapter link found".
+
+Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
 
 On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites build their pages with scripts. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and auto-resume starts it.
 

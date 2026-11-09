@@ -42,7 +42,9 @@
   var autoNext = load('scroller-next', 1) === 1, loading = false, visited = [location.href.split('#')[0]];
   var on = false, alive = true, last = 0, lock = null, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
-  var pos = 0, atEnd = 0, byHand = false;
+  var pos = 0, atEnd = 0, stuck = 0, byHand = false;
+  // Time at the bottom before going to the next chapter, in milliseconds.
+  var END_WAIT = 1500;
   var root = document.scrollingElement || document.documentElement;
 
   // Find the part of the page that scrolls.
@@ -68,7 +70,9 @@
     '.mode{width:40px;height:26px;line-height:26px;border-radius:13px;font-size:11px;background:rgba(255,255,255,.14)}' +
     '.mode{white-space:nowrap}.dir{font-size:17px}.nextoff{opacity:.45;text-decoration:line-through}' +
     'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
-    'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}';
+    'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}' +
+    '.note{display:none;position:absolute;left:60px;top:50%;transform:translateY(-50%);white-space:nowrap;padding:8px 12px;' +
+    'border-radius:10px;background:rgba(20,20,24,.85);color:#fff;font:13px -apple-system,system-ui,sans-serif}';
   // Some sites block style tags. A constructed style sheet still works there.
   try {
     var sheet = new CSSStyleSheet();
@@ -188,11 +192,26 @@
   function screenH() { return tgt === root ? innerHeight : tgt.clientHeight; }
   function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
 
+  // True when the page cannot move down any more.
+  function atBottom() {
+    var y = getY();
+    if (y >= maxY() - 2) return true;
+    // Safari's toolbars change the screen height. Test with a small move.
+    instant(true);
+    setY(y + 2);
+    var moved = getY() > y;
+    setY(y);
+    if (!on) instant(false);
+    return !moved;
+  }
+
   function clamp(y, max) { return Math.max(0, Math.min(y, max)); }
 
   // Jump one screen now. d is 1 for down, -1 for up.
   function step(d) {
     if (!tgt) tgt = pick() || root;
+    // ▼ at the bottom of the page goes to the next chapter.
+    if (d > 0 && atBottom()) { goNext(); return; }
     instant(true);
     pos = clamp(getY() + d * screenH() * JUMP, maxY());
     setY(pos);
@@ -202,29 +221,81 @@
     atEnd = 0;
   }
 
-  // Find the link to the next chapter. Returns its address, or null.
-  // Each link gets points. The link with the most points wins.
+  // Find the next chapter link or button. Returns { url, el }, or null.
+  // Each link or button gets points. The one with the most points wins.
+  var NEXT_WORDS = /^(next|next chapter|next chap|next ch\.?|next episode|next ep\.?|next page|chapter ›|다음|다음화|次|次へ|次の話|下一|下一章|下一话|下一話|siguiente|suivant|próximo|proximo|weiter)/;
+  var CHAPTER = /\b(chapter|chap|ch|episode|ep)\b|화|話|章/;
+  function visible(e) { return !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length); }
   function findNext() {
     var best = null, top = 0;
-    var cands = Array.prototype.slice.call(document.querySelectorAll('a[href], link[rel~="next"][href]'));
-    cands.forEach(function (a) {
-      var url;
-      try { url = new URL(a.href, location.href); } catch (e) { return; }
-      if (url.origin !== location.origin || !/^https?:/.test(url.protocol)) return;
-      var u = url.href.split('#')[0];
-      if (visited.indexOf(u) >= 0) return;
-      var text = ((a.textContent || '') + ' ' + (a.getAttribute('aria-label') || '') + ' ' + (a.getAttribute('title') || '')).trim().toLowerCase();
-      var cls = ((a.className && a.className.baseVal !== undefined ? a.className.baseVal : a.className) + ' ' + a.id).toLowerCase();
-      if (/prev|이전|前/.test(text + ' ' + cls) || /\bback\b/.test(text)) return;
+    var cands = document.querySelectorAll('a[href], link[rel~="next"][href], button, [role="button"], [role="link"], [onclick]');
+    Array.prototype.forEach.call(cands, function (a) {
+      if (host.contains(a)) return;
+      var url = null, href = a.getAttribute('href');
+      if (href && !/^(#|javascript:)/i.test(href.trim())) {
+        try { url = new URL(href, location.href); } catch (e) { return; }
+        if (url.origin !== location.origin || !/^https?:/.test(url.protocol)) return;
+        url = url.href.split('#')[0];
+        if (visited.indexOf(url) >= 0) return;
+      }
+      var alt = a.querySelector && a.querySelector('img[alt]');
+      var text = ((a.textContent || '') + ' ' + (a.getAttribute('aria-label') || '') + ' ' +
+        (a.getAttribute('title') || '') + ' ' + (alt ? alt.alt : '')).replace(/\s+/g, ' ').trim().toLowerCase();
+      var own = ((typeof a.className === 'string' ? a.className : '') + ' ' + (a.id || '')).toLowerCase();
+      var par = a.parentElement;
+      var near = par ? ((typeof par.className === 'string' ? par.className : '') + ' ' + (par.id || '')).toLowerCase() : '';
+      if (/prev|이전|前|上一|anterior|précédent/.test(text + ' ' + own) || /\bback\b|^[‹«←<]+$/.test(text)) return;
+      if (a.disabled || a.getAttribute('aria-disabled') === 'true' || /disabled/.test(own)) return;
       var score = 0;
       if (/(^|\s)next(\s|$)/i.test(a.getAttribute('rel') || '')) score += 100;
-      if (/^(next|next chapter|next ch\.?|next episode|next page|다음|次)/.test(text)) score += 50;
-      else if (/^[›»→>]+$|^next\b|\bnext\b.*\b(chapter|ch|episode|ep)\b/.test(text)) score += 40;
-      if (/\b(chapter|ch|episode|ep)\b/.test(text)) score += 20;
-      if (/next/.test(cls)) score += 20;
-      if (score > top) { top = score; best = u; }
+      if (NEXT_WORDS.test(text)) score += 50;
+      else if (/^[›»→>]+$|^next\b|\bnext\b/.test(text)) score += 40;
+      if (CHAPTER.test(text)) score += 20;
+      if (/next/.test(own)) score += 40;
+      else if (/next/.test(near) && !/prev/.test(text + own)) score += 30;
+      if (a.nodeName !== 'LINK') score += visible(a) ? 10 : -30;
+      if (score > top) { top = score; best = { url: url, el: a }; }
     });
     return top >= 40 ? best : null;
+  }
+
+  // A short message next to the bar.
+  var note = document.createElement('div');
+  note.className = 'note';
+  shadow.appendChild(note);
+  var noteT = 0;
+  function say(text) {
+    note.textContent = text;
+    note.style.display = 'block';
+    clearTimeout(noteT);
+    noteT = setTimeout(function () { note.style.display = 'none'; }, 4000);
+  }
+
+  // Go to the next chapter. Returns false when there is none.
+  function goNext() {
+    var next = findNext();
+    if (!next) { say('No next chapter link found'); return false; }
+    say('Next chapter…');
+    if (next.url && next.el.nodeName !== 'BUTTON') {
+      loadNext(next.url);
+    } else {
+      // A button that runs the site's own code. Tap it, as you would.
+      save('scroller-resume', Date.now());
+      var before = location.href;
+      loading = true;
+      next.el.click();
+      setTimeout(function () {
+        loading = false;
+        if (!alive) return;
+        // The site changed the page without a new load. Start at the top.
+        if (location.href !== before) {
+          visited.push(location.href.split('#')[0]);
+          tgt = pick() || root; pos = 0; setY(0);
+        }
+        atEnd = 0; waited = 0; last = 0;
+      }, 2000);
+    }
+    return true;
   }
 
   // Many sites load images only when you get near them. Copy the real
@@ -333,30 +404,33 @@
       // Skip long gaps (Safari was in the background), so the page does not jump.
       if (dt > 0 && dt < 250) {
         if (byHand) { pos = getY(); byHand = false; }
-        var max = maxY();
+        var max = maxY(), before = getY(), tried = false;
         if (mode === 'page') {
           // Wait, then jump one screen.
           waited += dt;
           if (waited >= WAITS[wi] * 1000) {
             waited = 0;
-            pos = clamp(getY() + dir * screenH() * JUMP, max);
+            pos = clamp(before + dir * screenH() * JUMP, max);
             setY(pos);
+            tried = true;
           }
         } else {
           pos = clamp(pos + dir * SPEEDS[si] * dt / 1000, max);
           setY(pos);
+          tried = true;
         }
-        // Stop when the page stays at the end (or the top, when moving up) for 3 seconds.
-        // The wait lets pages that load more images at the bottom continue.
-        atEnd = (dir > 0 ? pos >= max - 1 : pos <= 0) ? atEnd + dt : 0;
-        // At the end, go to the next chapter. If there is none, stop.
+        // At the end (or the top, when moving up)? Also count it when the page
+        // does not move, because Safari's toolbars change the screen height.
+        var end = dir > 0 ? pos >= max - 1 : pos <= 0;
+        if (tried && Math.abs(getY() - before) < 0.5) stuck += dt; else if (tried) stuck = 0;
+        if (mode === 'page' && tried && Math.abs(getY() - before) < 0.5) stuck = 1000;
+        atEnd = end || stuck >= 400 ? atEnd + dt : 0;
+        // Wait a short time, so images that load at the bottom can extend the page.
+        // Then go to the next chapter. If there is none, stop.
         // Auto-resume stays on, so the next chapter starts by itself.
-        if (atEnd > 3000) {
-          atEnd = 0;
-          var next = dir > 0 && autoNext ? findNext() : null;
-          if (next) {
-            loadNext(next);
-          } else {
+        if (atEnd > END_WAIT) {
+          atEnd = 0; stuck = 0;
+          if (!(dir > 0 && autoNext && goNext())) {
             setPlay(false);
             save('scroller-resume', Date.now());
           }
