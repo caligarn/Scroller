@@ -4,8 +4,9 @@
 (function () {
   if (window.__scroller) { window.__scroller.stop(); return; }
 
-  // The buttons fade after this many milliseconds.
-  var HIDE_AFTER = 3000;
+  // Auto-resume: when you tap the bookmark on the next page, Scroller starts
+  // at once if it was playing on this site in the last 30 minutes.
+  var RESUME_FOR = 30 * 60 * 1000;
 
   // Speeds in screen points per second. The steps get larger as the speed goes up.
   var SPEEDS = [20, 40, 60, 80, 100, 120, 150, 200, 250, 300, 400, 500, 600, 800,
@@ -37,7 +38,7 @@
   var zi = nearest(SIZES, load('scroller-size', 100)), size = SIZES[zi];
   // dir is 1 to move down, -1 to move up.
   var dir = load('scroller-up', 0) ? -1 : 1;
-  var on = false, alive = true, last = 0, lock = null, hideT = 0, tgt = null;
+  var on = false, alive = true, last = 0, lock = null, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
   var pos = 0, atEnd = 0, byHand = false;
   var root = document.scrollingElement || document.documentElement;
@@ -59,8 +60,7 @@
   var shadow = host.attachShadow({ mode: 'open' });
   var css = '.bar{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px;border-radius:999px;background:rgba(20,20,24,.85);' +
     '-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff;font:13px -apple-system,system-ui,sans-serif;' +
-    'transition:opacity .5s;-webkit-user-select:none;user-select:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}' +
-    '.off{opacity:0;pointer-events:none}' +
+    '-webkit-user-select:none;user-select:none;box-shadow:0 4px 16px rgba(0,0,0,.3)}' +
     'button{all:unset;width:36px;height:36px;border-radius:50%;text-align:center;line-height:36px;font-size:15px;font-weight:600;color:#fff;cursor:pointer;touch-action:manipulation}' +
     'button:active{background:rgba(255,255,255,.18)}.play{background:#0a5cff}' +
     '.mode{width:40px;height:26px;line-height:26px;border-radius:13px;font-size:11px;background:rgba(255,255,255,.14)}' +
@@ -121,15 +121,9 @@
   el('i');
   // ▲ and ▼ jump one screen at once, while playing or stopped.
   el('button', '▲', 'Back one screen', function () { step(-1); });
-  var play = el('button', '▶', 'Start scrolling', function () { setPlay(!on); });
+  var play = el('button', '▶', 'Start scrolling', toggle);
   play.className = 'play';
   el('button', '▼', 'Forward one screen', function () { step(1); });
-
-  function show() {
-    bar.classList.remove('off');
-    clearTimeout(hideT);
-    hideT = setTimeout(function () { bar.classList.add('off'); }, HIDE_AFTER);
-  }
 
   function short(n) { return n >= 10000 ? n / 1000 + 'k' : String(n); }
 
@@ -159,6 +153,7 @@
   }
   function onVisible() {
     if (document.visibilityState === 'visible' && on) wake(true);
+    if (document.visibilityState === 'hidden') onLeave();
   }
 
   // Many sites turn on smooth scrolling. That makes each small step a slow
@@ -214,23 +209,30 @@
     wake(on);
   }
 
+  // You start or stop. This also turns auto-resume on or off.
+  function toggle() {
+    setPlay(!on);
+    save('scroller-resume', on ? Date.now() : 0);
+  }
+  // Leaving the page while playing keeps auto-resume on for the next page.
+  function onLeave() {
+    if (on) save('scroller-resume', Date.now());
+  }
+
   function onKey(e) {
     if (e.code === 'Space' && !/INPUT|TEXTAREA/.test(e.target.tagName) && !e.target.isContentEditable) {
       e.preventDefault();
-      setPlay(!on);
+      toggle();
     }
   }
   // When you scroll by hand, scrolling continues from your new place.
   function onHand() { byHand = true; }
 
-  // Any touch shows the buttons. They fade again after a few seconds.
-  var touches = ['pointerdown', 'touchstart', 'keydown'];
   var hands = ['touchmove', 'wheel'];
-  touches.forEach(function (t) { document.addEventListener(t, show, { capture: true, passive: true }); });
   hands.forEach(function (t) { document.addEventListener(t, onHand, { capture: true, passive: true }); });
   document.addEventListener('keydown', onKey);
   document.addEventListener('visibilitychange', onVisible);
-  bar.addEventListener('click', show);
+  window.addEventListener('pagehide', onLeave);
 
   function tick(ts) {
     if (!alive) return;
@@ -256,17 +258,22 @@
         // Stop when the page stays at the end (or the top, when moving up) for 3 seconds.
         // The wait lets pages that load more images at the bottom continue.
         atEnd = (dir > 0 ? pos >= max - 1 : pos <= 0) ? atEnd + dt : 0;
-        if (atEnd > 3000) setPlay(false);
+        // Auto-resume stays on, so the next chapter starts by itself.
+        if (atEnd > 3000) {
+          setPlay(false);
+          save('scroller-resume', Date.now());
+        }
       }
     }
     requestAnimationFrame(tick);
   }
 
+  // Close (the close button, or a second tap on the bookmark). Auto-resume turns off.
   function stop() {
     setPlay(false);
+    save('scroller-resume', 0);
     alive = false;
-    clearTimeout(hideT);
-    touches.forEach(function (t) { document.removeEventListener(t, show, { capture: true }); });
+    window.removeEventListener('pagehide', onLeave);
     hands.forEach(function (t) { document.removeEventListener(t, onHand, { capture: true }); });
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVisible);
@@ -278,6 +285,10 @@
   window.__scroller = { stop: stop };
   (document.body || document.documentElement).appendChild(host);
   update();
-  show();
   requestAnimationFrame(tick);
+  var since = Date.now() - load('scroller-resume', 0);
+  if (since >= 0 && since < RESUME_FOR) {
+    // Wait a moment, so the new page can finish its layout.
+    setTimeout(function () { if (alive && !on) setPlay(true); }, 500);
+  }
 })();

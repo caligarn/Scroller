@@ -34,7 +34,13 @@ Tap the mode button (**Scroll** or **Page**) to change the mode.
 
 Scroller remembers your mode, direction, speed, wait, and size on each site.
 
-The buttons fade away after 3 seconds. Tap the page to show them again. The page stops at the end (or at the top, when it moves up).
+The page stops at the end (or at the top, when it moves up).
+
+### Next chapter (auto-resume)
+
+A bookmark runs only on the page that is open. When Safari opens a new page, the bar goes away. Tap **Scroller** again on the new page. If it was playing on the last page, it starts at once, with the same mode, speed, and direction.
+
+Auto-resume stays on when the page stops by itself at the end. It turns off when you tap **❚❚**, tap **✕**, or tap **Scroller** to remove the bar. It also turns off after 30 minutes.
 
 To check your bookmark, open `test.html` (for example `https://scroller-hw96.vercel.app/test.html`) and tap **Scroller**.
 
