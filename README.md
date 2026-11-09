@@ -36,7 +36,15 @@ Scroller remembers your mode, direction, speed, wait, and size on each site.
 
 The page stops at the end (or at the top, when it moves up).
 
-### Next chapter (auto-resume)
+### Next chapter
+
+When the page reaches the end, Scroller looks for the site's "next chapter" link and goes on by itself. It skips "Previous" and "Back" links. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
+
+On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites build their pages with scripts. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and auto-resume starts it.
+
+If a site picks the wrong link, turn **Next** off on that site.
+
+### Auto-resume
 
 A bookmark runs only on the page that is open. When Safari opens a new page, the bar goes away. Tap **Scroller** again on the new page. If it was playing on the last page, it starts at once, with the same mode, speed, and direction.
 

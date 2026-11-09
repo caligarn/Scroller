@@ -38,6 +38,8 @@
   var zi = nearest(SIZES, load('scroller-size', 100)), size = SIZES[zi];
   // dir is 1 to move down, -1 to move up.
   var dir = load('scroller-up', 0) ? -1 : 1;
+  // autoNext: at the end of a page, go to the next chapter. On at first.
+  var autoNext = load('scroller-next', 1) === 1, loading = false, visited = [location.href.split('#')[0]];
   var on = false, alive = true, last = 0, lock = null, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
   var pos = 0, atEnd = 0, byHand = false;
@@ -64,7 +66,7 @@
     'button{all:unset;width:36px;height:36px;border-radius:50%;text-align:center;line-height:36px;font-size:15px;font-weight:600;color:#fff;cursor:pointer;touch-action:manipulation}' +
     'button:active{background:rgba(255,255,255,.18)}.play{background:#0a5cff}' +
     '.mode{width:40px;height:26px;line-height:26px;border-radius:13px;font-size:11px;background:rgba(255,255,255,.14)}' +
-    '.mode{white-space:nowrap}.dir{font-size:17px}' +
+    '.mode{white-space:nowrap}.dir{font-size:17px}.nextoff{opacity:.45;text-decoration:line-through}' +
     'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
     'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}';
   // Some sites block style tags. A constructed style sheet still works there.
@@ -104,6 +106,10 @@
     update();
   });
   dirBtn.className = 'mode dir';
+  var nextBtn = el('button', 'Next', '', function () {
+    autoNext = !autoNext;
+    update();
+  });
   // + makes the number larger. In Scroll mode it is the speed. In Page mode it is the wait in seconds.
   el('button', '+', 'Increase', function () {
     if (mode === 'page') wi = Math.min(WAITS.length - 1, wi + 1); else si = Math.min(SPEEDS.length - 1, si + 1);
@@ -133,6 +139,8 @@
     modeBtn.setAttribute('aria-label', page ? 'Page mode. Tap for Scroll mode' : 'Scroll mode. Tap for Page mode');
     speedOut.textContent = page ? WAITS[wi] + 's' : short(SPEEDS[si]);
     dirBtn.textContent = dir > 0 ? '↓' : '↑';
+    nextBtn.className = autoNext ? 'mode' : 'mode nextoff';
+    nextBtn.setAttribute('aria-label', autoNext ? 'Next chapter: on. Tap to turn off' : 'Next chapter: off. Tap to turn on');
     dirBtn.setAttribute('aria-label', dir > 0 ? 'Moving down. Tap to move up' : 'Moving up. Tap to move down');
     sizeOut.textContent = size + '%';
     document.documentElement.style.zoom = size === 100 ? '' : size / 100;
@@ -142,6 +150,7 @@
     save('scroller-page', page ? 1 : 0);
     save('scroller-size', size);
     save('scroller-up', dir < 0 ? 1 : 0);
+    save('scroller-next', autoNext ? 1 : 2);
   }
 
   // Keep the screen on while the page scrolls.
@@ -193,6 +202,88 @@
     atEnd = 0;
   }
 
+  // Find the link to the next chapter. Returns its address, or null.
+  // Each link gets points. The link with the most points wins.
+  function findNext() {
+    var best = null, top = 0;
+    var cands = Array.prototype.slice.call(document.querySelectorAll('a[href], link[rel~="next"][href]'));
+    cands.forEach(function (a) {
+      var url;
+      try { url = new URL(a.href, location.href); } catch (e) { return; }
+      if (url.origin !== location.origin || !/^https?:/.test(url.protocol)) return;
+      var u = url.href.split('#')[0];
+      if (visited.indexOf(u) >= 0) return;
+      var text = ((a.textContent || '') + ' ' + (a.getAttribute('aria-label') || '') + ' ' + (a.getAttribute('title') || '')).trim().toLowerCase();
+      var cls = ((a.className && a.className.baseVal !== undefined ? a.className.baseVal : a.className) + ' ' + a.id).toLowerCase();
+      if (/prev|이전|前/.test(text + ' ' + cls) || /\bback\b/.test(text)) return;
+      var score = 0;
+      if (/(^|\s)next(\s|$)/i.test(a.getAttribute('rel') || '')) score += 100;
+      if (/^(next|next chapter|next ch\.?|next episode|next page|다음|次)/.test(text)) score += 50;
+      else if (/^[›»→>]+$|^next\b|\bnext\b.*\b(chapter|ch|episode|ep)\b/.test(text)) score += 40;
+      if (/\b(chapter|ch|episode|ep)\b/.test(text)) score += 20;
+      if (/next/.test(cls)) score += 20;
+      if (score > top) { top = score; best = u; }
+    });
+    return top >= 40 ? best : null;
+  }
+
+  // Many sites load images only when you get near them. Copy the real
+  // image address into place, because the site's own code does not run here.
+  function fixImages(rootEl) {
+    rootEl.querySelectorAll('img, source').forEach(function (img) {
+      ['data-src', 'data-lazy-src', 'data-original', 'data-url', 'data-lazy'].forEach(function (k) {
+        var v = img.getAttribute(k);
+        var src = img.getAttribute('src') || '';
+        if (v && (!src || /^data:|blank|placeholder|loading|lazy/i.test(src))) img.setAttribute('src', v);
+      });
+      var ss = img.getAttribute('data-srcset') || img.getAttribute('data-lazy-srcset');
+      if (ss) img.setAttribute('srcset', ss);
+      img.removeAttribute('loading');
+    });
+  }
+
+  // Open the next chapter as a new page. Auto-resume starts it when you tap the bookmark.
+  function openNext(url) {
+    save('scroller-resume', Date.now());
+    location.href = url;
+  }
+
+  // Load the next chapter into this page, so Scroller keeps running.
+  // If that does not work on this site, open it as a new page.
+  function loadNext(url) {
+    loading = true;
+    visited.push(url);
+    fetch(url, { credentials: 'include' }).then(function (r) {
+      if (!r.ok || new URL(r.url).origin !== location.origin) throw new Error('not ok');
+      return r.text().then(function (html) { return { html: html, url: r.url }; });
+    }).then(function (got) {
+      var doc = new DOMParser().parseFromString(got.html, 'text/html');
+      if (!doc.body || !doc.body.children.length) throw new Error('empty');
+      history.pushState(null, '', got.url);
+      visited.push(got.url.split('#')[0]);
+      if (doc.title) document.title = doc.title;
+      document.body.className = doc.body.className;
+      Array.prototype.slice.call(document.body.childNodes).forEach(function (n) { if (n !== host) n.remove(); });
+      Array.prototype.slice.call(doc.body.childNodes).forEach(function (n) {
+        if (n.nodeName !== 'SCRIPT') document.body.insertBefore(document.adoptNode(n), host);
+      });
+      fixImages(document.body);
+      tgt = pick() || root;
+      pos = 0;
+      setY(0);
+      atEnd = 0; waited = 0; last = 0;
+      // Give the images time to load. If the new page is still short,
+      // the site builds its pages with scripts, so open it as a new page.
+      setTimeout(function () {
+        loading = false;
+        if (alive && maxY() < innerHeight * 0.5) openNext(got.url);
+      }, 2500);
+    }).catch(function () {
+      loading = false;
+      if (alive) openNext(url);
+    });
+  }
+
   function setPlay(v) {
     on = v; last = 0;
     if (on) {
@@ -236,7 +327,7 @@
 
   function tick(ts) {
     if (!alive) return;
-    if (on && tgt) {
+    if (on && tgt && !loading) {
       var dt = last ? ts - last : 0;
       last = ts;
       // Skip long gaps (Safari was in the background), so the page does not jump.
@@ -258,10 +349,17 @@
         // Stop when the page stays at the end (or the top, when moving up) for 3 seconds.
         // The wait lets pages that load more images at the bottom continue.
         atEnd = (dir > 0 ? pos >= max - 1 : pos <= 0) ? atEnd + dt : 0;
+        // At the end, go to the next chapter. If there is none, stop.
         // Auto-resume stays on, so the next chapter starts by itself.
         if (atEnd > 3000) {
-          setPlay(false);
-          save('scroller-resume', Date.now());
+          atEnd = 0;
+          var next = dir > 0 && autoNext ? findNext() : null;
+          if (next) {
+            loadNext(next);
+          } else {
+            setPlay(false);
+            save('scroller-resume', Date.now());
+          }
         }
       }
     }
