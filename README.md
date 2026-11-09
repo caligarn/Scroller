@@ -20,8 +20,10 @@ You can also add the Scroller page to your Home Screen (**Share**, then **Add to
 1. Open a manga page in Safari.
 2. Tap **Scroller** in the Favorites bar. A small bar shows on the left side.
 3. Tap **▶** to start. Tap **❚❚** to stop.
-4. Use **+ −** to change the speed, from 20 to 100,000 points per second (shown as 100k). Use **A+ A−** to change the size.
-5. Tap **✕**, or tap **Scroller** again, to remove the bar.
+4. Use **+ −** to change the speed, from 20 to 100,000 points per second (shown as 100k). Use **A+ A−** to change the size, from 10% to 400%.
+5. Tap **▲** or **▼** to jump one screen up or down at once. These work while playing or stopped.
+6. Tap the arrow button (**↓** or **↑**) to move down or up. This works in both modes.
+7. Tap **✕**, or tap **Scroller** again, to remove the bar.
 
 ### Two modes
 
@@ -30,9 +32,9 @@ Tap the mode button (**Scroll** or **Page**) to change the mode.
 - **Scroll:** the page moves smoothly. **+ −** change the speed.
 - **Page:** the page jumps down one screen, then waits. **+ −** change the wait, from 0.5 to 60 seconds. Each jump is 90% of the screen, so the bottom line stays in view at the top.
 
-Scroller remembers your mode, speed, wait, and size on each site.
+Scroller remembers your mode, direction, speed, wait, and size on each site.
 
-The buttons fade away after 3 seconds. Tap the page to show them again. The page stops at the end.
+The buttons fade away after 3 seconds. Tap the page to show them again. The page stops at the end (or at the top, when it moves up).
 
 To check your bookmark, open `test.html` (for example `https://scroller-hw96.vercel.app/test.html`) and tap **Scroller**.
 
