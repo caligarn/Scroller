@@ -272,9 +272,40 @@
   }
 
   // Go to the next chapter. Returns false when there is none.
+  // Add 1 to a number and keep its leading zeros: 02 -> 03, 09 -> 10, 113 -> 114.
+  function bump(str) {
+    var n = String(parseInt(str, 10) + 1);
+    while (n.length < str.length) n = '0' + n;
+    return n;
+  }
+  // Guess the next chapter address: add 1 to the chapter number in the address.
+  // Use the number after a word like "chapter" or "ep". Else use the last number.
+  function guessNext() {
+    var u = new URL(location.href), path = u.pathname, re = /\d+/g, m, all = [], use = null;
+    while ((m = re.exec(path))) all.push(m);
+    all.forEach(function (x) {
+      if (/(chapter|chap|ch|episode|ep|화|話)[-_\/ .]*$/i.test(path.slice(Math.max(0, x.index - 12), x.index))) use = x;
+    });
+    use = use || all[all.length - 1];
+    if (!use) return null;
+    u.pathname = path.slice(0, use.index) + bump(use[0]) + path.slice(use.index + use[0].length);
+    u.hash = '';
+    return { url: u.href, num: bump(use[0]) };
+  }
+
   function goNext() {
     var next = findNext();
-    if (!next) { say('No next chapter link found'); return false; }
+    if (!next) {
+      // No link found. Try the next number in the address.
+      var guess = guessNext();
+      if (guess && visited.indexOf(guess.url) < 0) {
+        say('Next chapter (address + 1)…');
+        loadNext(guess.url, guess.num);
+        return true;
+      }
+      say('No next chapter link found');
+      return false;
+    }
     say('Next chapter…');
     if (next.url && next.el.nodeName !== 'BUTTON') {
       loadNext(next.url);
@@ -321,10 +352,16 @@
 
   // Load the next chapter into this page, so Scroller keeps running.
   // If that does not work on this site, open it as a new page.
-  function loadNext(url) {
+  // guessNum is set when the address is a guess (address + 1).
+  function loadNext(url, guessNum) {
     loading = true;
     visited.push(url);
     fetch(url, { credentials: 'include' }).then(function (r) {
+      // A guessed address that does not exist, or that sends you back to
+      // another page (for example the title page): there is no next chapter.
+      if (guessNum && (r.status === 404 || r.status === 410 || (r.redirected && r.url.indexOf(guessNum) < 0))) {
+        throw new Error('none');
+      }
       if (!r.ok || new URL(r.url).origin !== location.origin) throw new Error('not ok');
       return r.text().then(function (html) { return { html: html, url: r.url }; });
     }).then(function (got) {
@@ -343,15 +380,22 @@
       pos = 0;
       setY(0);
       atEnd = 0; waited = 0; last = 0;
-      // Give the images time to load. If the new page is still short,
+      // Give the images time to load. If the new page is still almost empty,
       // the site builds its pages with scripts, so open it as a new page.
       setTimeout(function () {
         loading = false;
-        if (alive && maxY() < innerHeight * 0.5) openNext(got.url);
+        if (alive && maxY() < innerHeight * 0.2) openNext(got.url);
       }, 2500);
-    }).catch(function () {
+    }).catch(function (e) {
       loading = false;
-      if (alive) openNext(url);
+      if (!alive) return;
+      if (e && e.message === 'none') {
+        say('No next chapter');
+        setPlay(false);
+        save('scroller-resume', Date.now());
+      } else {
+        openNext(url);
+      }
     });
   }
 

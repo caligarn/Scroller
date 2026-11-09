@@ -38,7 +38,7 @@ The page stops at the end (or at the top, when it moves up).
 
 ### Next chapter
 
-When the page reaches the bottom, Scroller waits 1.5 seconds (so images at the bottom can load), then goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds none, it stops and shows "No next chapter link found".
+When the page reaches the bottom, Scroller waits 1.5 seconds (so images at the bottom can load), then goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds no link, it adds 1 to the chapter number in the page address (for example `chapter-02` becomes `chapter-03`, and `113` becomes `114`). It uses the number after a word like "chapter" or "ep", or else the last number. If that address does not exist, or the site sends you to another page, it stops and shows "No next chapter".
 
 Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
 
