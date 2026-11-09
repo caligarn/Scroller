@@ -38,11 +38,13 @@ The page stops at the end (or at the top, when it moves up).
 
 ### Next chapter
 
-When the page reaches the bottom, Scroller waits 1.5 seconds (so images at the bottom can load), then goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds no link, it adds 1 to the chapter number in the page address (for example `chapter-02` becomes `chapter-03`, and `113` becomes `114`). It uses the number after a word like "chapter" or "ep", or else the last number. If that address does not exist, or the site sends you to another page, it stops and shows "No next chapter".
+When the page reaches the bottom, Scroller waits until the images there have loaded (up to 10 seconds), then 1.5 seconds more. Then it goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds no link, it adds 1 to the chapter number in the page address (for example `chapter-02` becomes `chapter-03`, and `113` becomes `114`). It uses the number after a word like "chapter" or "ep", or else the last number. If that address does not exist, or the site sends you to another page, it stops and shows "No next chapter".
 
 Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
 
-On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites build their pages with scripts. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and auto-resume starts it.
+On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites add their images with their own code. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and auto-resume starts it. Scroller also opens a new page if the site does not answer in 15 seconds.
+
+Scroller does not go to the next chapter when something holds the page in place (for example a popup), or when image slider buttons say "next".
 
 If a site picks the wrong link, turn **Next** off on that site.
 

@@ -42,9 +42,17 @@
   var autoNext = load('scroller-next', 1) === 1, loading = false, visited = [location.href.split('#')[0]];
   var on = false, alive = true, last = 0, lock = null, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
-  var pos = 0, atEnd = 0, stuck = 0, byHand = false;
+  var pos = 0, atEnd = 0, stuck = 0, byHand = false, lastMax = 0, peak = 0, pendWait = 0;
+  // prevY: the real place at the last frame. tried: the code moved the page at the last frame.
+  var prevY = null, tried = false;
   // Time at the bottom before going to the next chapter, in milliseconds.
   var END_WAIT = 1500;
+  // At the bottom, wait up to this long for images that are still loading.
+  var IMAGE_WAIT = 10000;
+  // Stop waiting for the next chapter to load after this long, in milliseconds.
+  var LOAD_LIMIT = 15000;
+  // Buttons that were tapped but did not open a new chapter. They are not tapped again.
+  var clicked = [];
   var root = document.scrollingElement || document.documentElement;
 
   // Find the part of the page that scrolls.
@@ -155,6 +163,8 @@
     save('scroller-size', size);
     save('scroller-up', dir < 0 ? 1 : 0);
     save('scroller-next', autoNext ? 1 : 2);
+    // A new size changes the page height. Measure the page again.
+    peak = 0; lastMax = 0;
   }
 
   // Keep the screen on while the page scrolls.
@@ -169,8 +179,9 @@
     if (document.visibilityState === 'hidden') onLeave();
   }
 
-  // Many sites turn on smooth scrolling. That makes each small step a slow
-  // animation, so the code turns it off while the page scrolls.
+  // Many sites turn on smooth scrolling or "snap" scrolling. Smooth scrolling makes
+  // each small step a slow animation. Snap scrolling pulls the page back. So the
+  // code turns both off while the page scrolls.
   var smooth = [];
   function instant(v) {
     if (v) {
@@ -178,12 +189,30 @@
         if (e && smooth.indexOf(e) < 0) {
           smooth.push(e);
           e.style.setProperty('scroll-behavior', 'auto', 'important');
+          e.style.setProperty('scroll-snap-type', 'none', 'important');
         }
       });
     } else {
-      smooth.forEach(function (e) { e.style.removeProperty('scroll-behavior'); });
+      smooth.forEach(function (e) {
+        e.style.removeProperty('scroll-behavior');
+        e.style.removeProperty('scroll-snap-type');
+      });
       smooth = [];
     }
+  }
+
+  // True while images on the page are still loading.
+  function imagesPending() {
+    var imgs = document.images;
+    for (var i = 0; i < imgs.length; i++) {
+      if (imgs[i].getAttribute('src') && !imgs[i].complete) return true;
+    }
+    return false;
+  }
+
+  // Start fresh after a new chapter, or after the page changes.
+  function resetEnd() {
+    atEnd = 0; stuck = 0; pendWait = 0; waited = 0; last = 0; lastMax = 0; peak = 0; prevY = null; tried = false;
   }
 
   function getY() { return tgt === root ? window.scrollY : tgt.scrollTop; }
@@ -230,7 +259,7 @@
     var best = null, top = 0;
     var cands = document.querySelectorAll('a[href], link[rel~="next"][href], button, [role="button"], [role="link"], [onclick]');
     Array.prototype.forEach.call(cands, function (a) {
-      if (host.contains(a)) return;
+      if (host.contains(a) || clicked.indexOf(a) >= 0) return;
       var url = null, href = a.getAttribute('href');
       if (href && !/^(#|javascript:)/i.test(href.trim())) {
         try { url = new URL(href, location.href); } catch (e) { return; }
@@ -246,6 +275,8 @@
       var near = par ? ((typeof par.className === 'string' ? par.className : '') + ' ' + (par.id || '')).toLowerCase() : '';
       if (/prev|이전|前|上一|anterior|précédent/.test(text + ' ' + own) || /\bback\b|^[‹«←<]+$/.test(text)) return;
       if (a.disabled || a.getAttribute('aria-disabled') === 'true' || /disabled/.test(own)) return;
+      // Image sliders also have "next" buttons. Skip them.
+      if (/swiper|slick|carousel|slider|owl-|glide|splide|gallery|lightbox|bullet/.test(own + ' ' + near)) return;
       var score = 0;
       if (/(^|\s)next(\s|$)/i.test(a.getAttribute('rel') || '')) score += 100;
       if (NEXT_WORDS.test(text)) score += 50;
@@ -314,6 +345,7 @@
       save('scroller-resume', Date.now());
       var before = location.href;
       loading = true;
+      clicked.push(next.el);
       next.el.click();
       setTimeout(function () {
         loading = false;
@@ -321,9 +353,11 @@
         // The site changed the page without a new load. Start at the top.
         if (location.href !== before) {
           visited.push(location.href.split('#')[0]);
-          tgt = pick() || root; pos = 0; setY(0);
+          tgt = pick() || root;
+          if (on) instant(true);
+          pos = 0; setY(0);
         }
-        atEnd = 0; waited = 0; last = 0;
+        resetEnd();
       }, 2000);
     }
     return true;
@@ -356,7 +390,11 @@
   function loadNext(url, guessNum) {
     loading = true;
     visited.push(url);
-    fetch(url, { credentials: 'include' }).then(function (r) {
+    // Stop waiting if the site does not answer in time. Then open it as a new page.
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var limit = setTimeout(function () { if (ctrl) ctrl.abort(); }, LOAD_LIMIT);
+    fetch(url, { credentials: 'include', signal: ctrl ? ctrl.signal : undefined }).then(function (r) {
+      clearTimeout(limit);
       // A guessed address that does not exist, or that sends you back to
       // another page (for example the title page): there is no next chapter.
       if (guessNum && (r.status === 404 || r.status === 410 || (r.redirected && r.url.indexOf(guessNum) < 0))) {
@@ -367,6 +405,11 @@
     }).then(function (got) {
       var doc = new DOMParser().parseFromString(got.html, 'text/html');
       if (!doc.body || !doc.body.children.length) throw new Error('empty');
+      // A site that adds its images with its own code sends a page with few
+      // images. The site's code does not run here, so open it as a new page.
+      var oldImgs = document.body.querySelectorAll('img').length;
+      var newImgs = doc.body.querySelectorAll('img').length;
+      if (oldImgs >= 3 && newImgs < oldImgs * 0.3) throw new Error('scripts');
       history.pushState(null, '', got.url);
       visited.push(got.url.split('#')[0]);
       if (doc.title) document.title = doc.title;
@@ -377,16 +420,26 @@
       });
       fixImages(document.body);
       tgt = pick() || root;
+      if (on) instant(true);
       pos = 0;
       setY(0);
-      atEnd = 0; waited = 0; last = 0;
-      // Give the images time to load. If the new page is still almost empty,
-      // the site builds its pages with scripts, so open it as a new page.
-      setTimeout(function () {
-        loading = false;
-        if (alive && maxY() < innerHeight * 0.2) openNext(got.url);
-      }, 2500);
+      resetEnd();
+      // Start again after a moment.
+      setTimeout(function () { loading = false; resetEnd(); }, 1000);
+      // When the images have loaded, check the page. If it is still almost
+      // empty, the site builds its pages with scripts, so open it as a new page.
+      var here = location.href, waitedFor = 0;
+      (function check() {
+        if (!alive || location.href !== here) return;
+        if (imagesPending() && waitedFor < IMAGE_WAIT) {
+          waitedFor += 500;
+          setTimeout(check, 500);
+          return;
+        }
+        if (maxY() < innerHeight * 0.2) openNext(here);
+      })();
     }).catch(function (e) {
+      clearTimeout(limit);
       loading = false;
       if (!alive) return;
       if (e && e.message === 'none') {
@@ -405,8 +458,7 @@
       tgt = pick() || root;
       instant(true);
       pos = getY();
-      atEnd = 0;
-      waited = 0;
+      resetEnd();
     } else {
       instant(false);
     }
@@ -445,16 +497,36 @@
     if (on && tgt && !loading) {
       var dt = last ? ts - last : 0;
       last = ts;
-      // Skip long gaps (Safari was in the background), so the page does not jump.
-      if (dt > 0 && dt < 250) {
-        if (byHand) { pos = getY(); byHand = false; }
-        var max = maxY(), before = getY(), tried = false;
+      // The part that scrolls was removed by the site. Find it again.
+      if (tgt !== root && !tgt.isConnected) { tgt = pick() || root; instant(true); pos = getY(); }
+      // Skip a long gap (Safari was in the background), so the page does not jump.
+      // Slow frames on a busy page still move, so the page does not freeze.
+      if (dt > 0 && dt < 1000) {
+        dt = Math.min(dt, 250);
+        if (byHand) { pos = getY(); byHand = false; prevY = null; }
+        var max = maxY(), y = getY(), h = screenH();
+        // Did the page really move since the last frame? If the code moved it
+        // and it did not move, it is stuck. In Page mode one failed jump is enough.
+        if (tried && prevY !== null) {
+          if (Math.abs(y - prevY) < 0.5) stuck = mode === 'page' ? 1000 : stuck + dt;
+          else stuck = 0;
+        }
+        // The page does not follow (a popup holds it, or Safari's toolbars hide
+        // the last part). Continue from the real place, so the code does not run ahead.
+        if (stuck >= 200) pos = y;
+        // The page grew (more images loaded). It is not the end yet.
+        if (max > lastMax + 1) { stuck = 0; atEnd = 0; }
+        lastMax = max;
+        peak = Math.max(peak, max);
+        // The page suddenly got much shorter: a popup froze it. It is not the end.
+        var frozen = peak > h && max < peak * 0.5;
+        tried = false;
         if (mode === 'page') {
           // Wait, then jump one screen.
           waited += dt;
           if (waited >= WAITS[wi] * 1000) {
             waited = 0;
-            pos = clamp(before + dir * screenH() * JUMP, max);
+            pos = clamp(y + dir * h * JUMP, max);
             setY(pos);
             tried = true;
           }
@@ -463,17 +535,25 @@
           setY(pos);
           tried = true;
         }
+        prevY = y;
         // At the end (or the top, when moving up)? Also count it when the page
-        // does not move, because Safari's toolbars change the screen height.
-        var end = dir > 0 ? pos >= max - 1 : pos <= 0;
-        if (tried && Math.abs(getY() - before) < 0.5) stuck += dt; else if (tried) stuck = 0;
-        if (mode === 'page' && tried && Math.abs(getY() - before) < 0.5) stuck = 1000;
-        atEnd = end || stuck >= 400 ? atEnd + dt : 0;
-        // Wait a short time, so images that load at the bottom can extend the page.
-        // Then go to the next chapter. If there is none, stop.
-        // Auto-resume stays on, so the next chapter starts by itself.
+        // is stuck near the end, because Safari's toolbars change the screen
+        // height. Far from the end, a stuck page is held, not at the end.
+        var edge = !frozen && (dir > 0
+          ? pos >= max - 1 || (stuck >= 400 && y >= max - h)
+          : pos <= 0 || (stuck >= 400 && y <= 1));
+        if (edge && dir > 0 && pendWait < IMAGE_WAIT && imagesPending()) {
+          // Images at the bottom are still loading. Wait for them (up to 10 s).
+          pendWait += dt;
+          atEnd = 0;
+        } else {
+          atEnd = edge ? atEnd + dt : 0;
+          if (!edge) pendWait = 0;
+        }
+        // Wait a short time at the end. Then go to the next chapter.
+        // If there is none, stop. Auto-resume stays on.
         if (atEnd > END_WAIT) {
-          atEnd = 0; stuck = 0;
+          resetEnd();
           if (!(dir > 0 && autoNext && goNext())) {
             setPlay(false);
             save('scroller-resume', Date.now());
