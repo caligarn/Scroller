@@ -17,7 +17,11 @@ You can also add the Scroller page to your Home Screen (**Share**, then **Add to
 
 ## Version
 
-The start page shows the version (for example "Version 19"). The bar shows it at the bottom (for example "v19"). If the bar shows a lower number than the start page, your bookmark is old: copy it again. Each update raises the number by 1. To change it, edit `VERSION` near the top of `reader.js`.
+The start page shows the version (for example "Version 20"). The bar shows it at the bottom (for example "v20"). If the bar shows a lower number than the start page, your bookmark is old: copy it again. Each update raises the number by 1. To change it, edit `VERSION` near the top of `reader.js`.
+
+### Status panel
+
+Tap the version at the bottom of the bar (for example "v20") to show or hide the status panel. It shows what Scroller sees: which part of the page scrolls, the place and the end of the page, how long the page has not moved, images still loading, and the next chapter link it found. If something goes wrong, take a screenshot with the panel open.
 
 ## Use it
 
@@ -48,7 +52,7 @@ Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Nex
 
 On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites add their images with their own code. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and it starts playing. Scroller also opens a new page if the site does not answer in 15 seconds.
 
-Scroller does not go to the next chapter when something holds the page in place (for example a popup), or when image slider buttons say "next".
+Scroller does not go to the next chapter when something holds the page in place far from the end (for example a popup), or when image slider buttons say "next". It ignores hidden parts of the page, such as a hidden chapter menu. As a safety net, if the page has not moved for 5 seconds within one screen of the end, it goes to the next chapter.
 
 If a site picks the wrong link, turn **Next** off on that site.
 

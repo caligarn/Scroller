@@ -5,7 +5,7 @@
   if (window.__scroller) { window.__scroller.stop(); return; }
 
   // Raise this number with every update. The start page and the bar show it.
-  var VERSION = '19';
+  var VERSION = '20';
 
   // Tapping the bookmark starts playing at once, with the saved settings.
   // Tap the pause button to read without scrolling.
@@ -47,6 +47,8 @@
   var pos = 0, atEnd = 0, stuck = 0, byHand = false, lastMax = 0, peak = 0, pendWait = 0;
   // prevY: the real place at the last frame. tried: the code moved the page at the last frame.
   var prevY = null, tried = false;
+  // movedAt: the time the page last moved. Used by the safety net at the end of a chapter.
+  var movedAt = Date.now(), lastSaid = '';
   // Time at the bottom before going to the next chapter, in milliseconds.
   var END_WAIT = 1500;
   // At the bottom, wait up to this long for images that are still loading.
@@ -57,6 +59,14 @@
   var clicked = [];
   var root = document.scrollingElement || document.documentElement;
 
+  // True when the element shows on the screen.
+  function onScreen(el, cs) {
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 &&
+      r.top < innerHeight && r.left < innerWidth &&
+      cs.visibility !== 'hidden' && cs.display !== 'none' && parseFloat(cs.opacity) > 0.05;
+  }
+
   // Find the part of the page that scrolls.
   function pick() {
     var best = null, gap = 0;
@@ -64,8 +74,12 @@
       var g = el.scrollHeight - el.clientHeight;
       // Use an inner box only when it fills most of the screen. A small box
       // (for example a chapter list) is not the page you read.
-      if (g > gap && el.clientHeight > innerHeight * 0.7 && el.clientWidth > innerWidth * 0.5 &&
-          /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { best = el; gap = g; }
+      // It must also be on the screen. Many sites have a hidden menu with a
+      // long chapter list. That menu is not the page you read.
+      if (g > gap && el.clientHeight > innerHeight * 0.7 && el.clientWidth > innerWidth * 0.5) {
+        var cs = getComputedStyle(el);
+        if (/(auto|scroll)/.test(cs.overflowY) && onScreen(el, cs)) { best = el; gap = g; }
+      }
     });
     return (root.scrollHeight - root.clientHeight >= gap) ? root : best;
   }
@@ -84,7 +98,9 @@
     '.mode{white-space:nowrap}.dir{font-size:17px}.nextoff{opacity:.45;text-decoration:line-through}' +
     'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
     'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}' +
-    '.ver{font-size:9px;opacity:.5;padding:4px 0 2px}' +
+    '.ver{font-size:9px;opacity:.5;padding:4px 0 2px;cursor:pointer}' +
+    '.dbg{display:none;position:absolute;left:60px;bottom:0;width:250px;white-space:pre-wrap;padding:8px 10px;' +
+    'border-radius:10px;background:rgba(20,20,24,.9);color:#fff;font:11px/1.45 ui-monospace,Menlo,monospace}' +
     '.note{display:none;position:absolute;left:60px;top:50%;transform:translateY(-50%);white-space:nowrap;padding:8px 12px;' +
     'border-radius:10px;background:rgba(20,20,24,.85);color:#fff;font:13px -apple-system,system-ui,sans-serif}';
   // Some sites block style tags. A constructed style sheet still works there.
@@ -148,7 +164,13 @@
   var play = el('button', '▶', 'Start scrolling', toggle);
   play.className = 'play';
   el('button', '▼', 'Forward one screen', function () { step(1); });
-  el('span', 'v' + VERSION, 'Version ' + VERSION).className = 'ver';
+  // Tap the version to show or hide the status panel. It shows what Scroller sees.
+  var verEl = el('span', 'v' + VERSION, 'Version ' + VERSION + '. Tap to show status', function () {
+    status = !status;
+    dbg.style.display = status ? 'block' : 'none';
+    showStatus(true);
+  });
+  verEl.className = 'ver';
 
   function short(n) { return n >= 10000 ? n / 1000 + 'k' : String(n); }
 
@@ -223,6 +245,7 @@
   // Start fresh after a new chapter, or after the page changes.
   function resetEnd() {
     atEnd = 0; stuck = 0; pendWait = 0; waited = 0; last = 0; lastMax = 0; peak = 0; prevY = null; tried = false;
+    movedAt = Date.now();
   }
 
   function getY() { return tgt === root ? window.scrollY : tgt.scrollTop; }
@@ -261,6 +284,14 @@
     setY(y);
     if (!on) instant(false);
     return !moved;
+  }
+
+  // True when the place is within one screen of the end. Both ways to measure
+  // the end are used, because Safari can give one of them in other units.
+  function nearEnd(y, h) {
+    if (y >= maxY() - h) return true;
+    var other = tgt === root ? root.scrollHeight - root.clientHeight : tgt.scrollHeight - tgt.clientHeight;
+    return y >= other - h;
   }
 
   function clamp(y, max) { return Math.max(0, Math.min(y, max)); }
@@ -319,12 +350,51 @@
     return top >= 40 ? best : null;
   }
 
+  // The status panel.
+  var status = false, nextSeen = '', nextAt = 0;
+  var dbg = document.createElement('div');
+  dbg.className = 'dbg';
+  shadow.appendChild(dbg);
+  function describe(e) {
+    if (e === root) return 'whole page';
+    return 'box ' + e.nodeName.toLowerCase() + (e.id ? '#' + e.id : '') +
+      (typeof e.className === 'string' && e.className ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '');
+  }
+  function showStatus(force) {
+    if (!status || !alive) return;
+    var t = tgt || pick() || root, was = tgt;
+    tgt = t;
+    var y = Math.round(getY()), end = Math.round(maxY());
+    var other = Math.round(t === root ? root.scrollHeight - root.clientHeight : t.scrollHeight - t.clientHeight);
+    // Look for the next chapter link once a second. It takes time on big pages.
+    if (force || Date.now() - nextAt > 1000) {
+      nextAt = Date.now();
+      var n = findNext(), g = guessNext();
+      nextSeen = n ? 'link "' + (n.el.textContent || '').trim().slice(0, 20) + '" ' + (n.url ? new URL(n.url).pathname : '(button)')
+        : g ? 'address + 1: ' + new URL(g.url).pathname : 'none';
+    }
+    tgt = was;
+    var imgs = 0, list = document.images;
+    for (var i = 0; i < list.length; i++) if (list[i].getAttribute('src') && !list[i].complete) imgs++;
+    dbg.textContent =
+      'Scrolls: ' + describe(t) + '\n' +
+      'Place: ' + y + ' of ' + end + ' (height says ' + other + ')\n' +
+      'Playing: ' + (on ? 'yes' : 'no') + (loading ? ', loading' : '') + ', ' + mode + ', ' + (dir > 0 ? 'down' : 'up') + '\n' +
+      'Not moved for: ' + ((Date.now() - movedAt) / 1000).toFixed(1) + ' s\n' +
+      'At end: ' + (atEnd / 1000).toFixed(1) + ' s, image wait: ' + (pendWait / 1000).toFixed(1) + ' s\n' +
+      'Images loading: ' + imgs + ' of ' + list.length + '\n' +
+      'Next: ' + (autoNext ? 'on' : 'OFF') + ', ' + nextSeen + '\n' +
+      'Size: ' + size + '%  Last message: ' + (lastSaid || '-');
+  }
+  var statusT = setInterval(function () { showStatus(false); }, 300);
+
   // A short message next to the bar.
   var note = document.createElement('div');
   note.className = 'note';
   shadow.appendChild(note);
   var noteT = 0;
   function say(text) {
+    lastSaid = text;
     note.textContent = text;
     note.style.display = 'block';
     clearTimeout(noteT);
@@ -531,6 +601,7 @@
           if (Math.abs(y - prevY) < 0.5) stuck = mode === 'page' ? 1000 : stuck + dt;
           else stuck = 0;
         }
+        if (prevY === null || Math.abs(y - prevY) >= 0.5) movedAt = Date.now();
         // The page does not follow (a popup holds it, or Safari's toolbars hide
         // the last part). Continue from the real place, so the code does not run ahead.
         if (stuck >= 200) pos = y;
@@ -580,8 +651,17 @@
           pendWait += dt;
           atEnd = 0;
         } else {
+          if (edge && atEnd === 0 && dir > 0 && autoNext) say('End of chapter. Next chapter soon…');
           atEnd = edge ? atEnd + dt : 0;
           if (!edge) pendWait = 0;
+        }
+        // Safety net: the page has not moved for a long time near the bottom.
+        // Go to the next chapter, whatever the other checks say.
+        var still = Date.now() - movedAt;
+        var limit = mode === 'page' ? WAITS[wi] * 1000 + 5000 : 5000;
+        if (dir > 0 && autoNext && still > limit && atEnd <= END_WAIT && nearEnd(y, h)) {
+          say('No movement near the end. Next chapter…');
+          atEnd = END_WAIT + 1;
         }
         // Wait a short time at the end. Then go to the next chapter.
         // If there is none, stop.
@@ -600,6 +680,7 @@
   function stop() {
     setPlay(false);
     alive = false;
+    clearInterval(statusT);
     hands.forEach(function (t) { document.removeEventListener(t, onHand, { capture: true }); });
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('visibilitychange', onVisible);
