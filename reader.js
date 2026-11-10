@@ -5,7 +5,7 @@
   if (window.__scroller) { window.__scroller.stop(); return; }
 
   // Raise this number with every update. The start page and the bar show it.
-  var VERSION = '20';
+  var VERSION = '21';
 
   // Tapping the bookmark starts playing at once, with the saved settings.
   // Tap the pause button to read without scrolling.
@@ -44,7 +44,7 @@
   var autoNext = load('scroller-next', 1) === 1, loading = false, visited = [location.href.split('#')[0]];
   var on = false, alive = true, last = 0, lock = null, tgt = null;
   // pos is the exact position. Safari rounds scroll steps, so the code keeps its own.
-  var pos = 0, atEnd = 0, stuck = 0, byHand = false, lastMax = 0, peak = 0, pendWait = 0;
+  var pos = 0, atEnd = 0, stuck = 0, byHand = false, pendWait = 0;
   // prevY: the real place at the last frame. tried: the code moved the page at the last frame.
   var prevY = null, tried = false;
   // movedAt: the time the page last moved. Used by the safety net at the end of a chapter.
@@ -52,7 +52,7 @@
   // Time at the bottom before going to the next chapter, in milliseconds.
   var END_WAIT = 1500;
   // At the bottom, wait up to this long for images that are still loading.
-  var IMAGE_WAIT = 8000;
+  var IMAGE_WAIT = 6000;
   // Stop waiting for the next chapter to load after this long, in milliseconds.
   var LOAD_LIMIT = 15000;
   // Buttons that were tapped but did not open a new chapter. They are not tapped again.
@@ -192,8 +192,6 @@
     save('scroller-size', size);
     save('scroller-up', dir < 0 ? 1 : 0);
     save('scroller-next', autoNext ? 1 : 2);
-    // A new size changes the page height. Measure the page again.
-    peak = 0; lastMax = 0;
   }
 
   // Keep the screen on while the page scrolls.
@@ -244,7 +242,7 @@
 
   // Start fresh after a new chapter, or after the page changes.
   function resetEnd() {
-    atEnd = 0; stuck = 0; pendWait = 0; waited = 0; last = 0; lastMax = 0; peak = 0; prevY = null; tried = false;
+    atEnd = 0; stuck = 0; pendWait = 0; waited = 0; last = 0; prevY = null; tried = false;
     movedAt = Date.now();
   }
 
@@ -252,32 +250,15 @@
   function setY(y) { if (tgt === root) window.scrollTo(0, y); else tgt.scrollTop = y; }
   // The visible height of the part that scrolls.
   function screenH() { return tgt === root ? innerHeight : tgt.clientHeight; }
-  // The end of the page (the largest scroll place).
-  // When the size is not 100%, Safari gives the height of the whole page in
-  // different units from the scroll place. So for the whole page, the code
-  // finds the real end: it moves to the bottom and back at once (you do not
-  // see this). It keeps the answer for half a second.
-  var endY = 0, endAt = 0;
-  function maxY(fresh) {
-    if (tgt !== root) return Math.max(0, tgt.scrollHeight - tgt.clientHeight);
-    var now = Date.now();
-    if (fresh || now - endAt > 500) {
-      var y = window.scrollY;
-      if (!on) instant(true);
-      window.scrollTo(0, 1e9);
-      endY = window.scrollY;
-      window.scrollTo(0, y);
-      if (!on) instant(false);
-      endAt = now;
-    }
-    return endY;
-  }
+  // The end of the page, from the page height. Safari can give this in other
+  // units when the size is not 100%, so the code does not use it to find the
+  // end of a chapter. It finds the end when the page stops moving.
+  function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
 
   // True when the page cannot move down any more.
   function atBottom() {
+    // Try a small move. If the page does not move, it is at the bottom.
     var y = getY();
-    if (y >= maxY(true) - 2) return true;
-    // Safari's toolbars change the screen height. Test with a small move.
     instant(true);
     setY(y + 2);
     var moved = getY() > y;
@@ -286,15 +267,7 @@
     return !moved;
   }
 
-  // True when the place is within one screen of the end. Both ways to measure
-  // the end are used, because Safari can give one of them in other units.
-  function nearEnd(y, h) {
-    if (y >= maxY() - h) return true;
-    var other = tgt === root ? root.scrollHeight - root.clientHeight : tgt.scrollHeight - tgt.clientHeight;
-    return y >= other - h;
-  }
-
-  function clamp(y, max) { return Math.max(0, Math.min(y, max)); }
+  function clamp(y) { return Math.max(0, y); }
 
   // Jump one screen now. d is 1 for down, -1 for up.
   function step(d) {
@@ -302,7 +275,7 @@
     // ▼ at the bottom of the page goes to the next chapter.
     if (d > 0 && atBottom()) { goNext(); return; }
     instant(true);
-    pos = clamp(getY() + d * screenH() * JUMP, maxY());
+    pos = clamp(getY() + d * screenH() * JUMP);
     setY(pos);
     if (!on) instant(false);
     // In Page mode, wait the full time before the next jump.
@@ -365,7 +338,6 @@
     var t = tgt || pick() || root, was = tgt;
     tgt = t;
     var y = Math.round(getY()), end = Math.round(maxY());
-    var other = Math.round(t === root ? root.scrollHeight - root.clientHeight : t.scrollHeight - t.clientHeight);
     // Look for the next chapter link once a second. It takes time on big pages.
     if (force || Date.now() - nextAt > 1000) {
       nextAt = Date.now();
@@ -378,7 +350,8 @@
     for (var i = 0; i < list.length; i++) if (list[i].getAttribute('src') && !list[i].complete) imgs++;
     dbg.textContent =
       'Scrolls: ' + describe(t) + '\n' +
-      'Place: ' + y + ' of ' + end + ' (height says ' + other + ')\n' +
+      'Place: ' + y + ' (height says end ' + end + ')\n' +
+      'Stuck: ' + (stuck / 1000).toFixed(1) + ' s\n' +
       'Playing: ' + (on ? 'yes' : 'no') + (loading ? ', loading' : '') + ', ' + mode + ', ' + (dir > 0 ? 'down' : 'up') + '\n' +
       'Not moved for: ' + ((Date.now() - movedAt) / 1000).toFixed(1) + ' s\n' +
       'At end: ' + (atEnd / 1000).toFixed(1) + ' s, image wait: ' + (pendWait / 1000).toFixed(1) + ' s\n' +
@@ -594,59 +567,37 @@
       if (dt > 0 && dt < 1000) {
         dt = Math.min(dt, 250);
         if (byHand) { pos = getY(); byHand = false; prevY = null; }
-        var max = maxY(), y = getY(), h = screenH();
-        // Did the page really move since the last frame? If the code moved it
-        // and it did not move, it is stuck. In Page mode one failed jump is enough.
-        if (tried && prevY !== null) {
-          if (Math.abs(y - prevY) < 0.5) stuck = mode === 'page' ? 1000 : stuck + dt;
-          else stuck = 0;
-        }
-        if (prevY === null || Math.abs(y - prevY) >= 0.5) movedAt = Date.now();
-        // The page does not follow (a popup holds it, or Safari's toolbars hide
-        // the last part). Continue from the real place, so the code does not run ahead.
+        var y = getY(), h = screenH();
+        // Did the page really move? Measure from the last place where it clearly
+        // moved, so very slow speeds (small steps) add up. If the code moved the
+        // page and it did not move, it is stuck. In Page mode one failed jump is enough.
+        if (prevY === null) prevY = y;
+        if (Math.abs(y - prevY) >= 0.5) { stuck = 0; prevY = y; movedAt = Date.now(); }
+        else if (tried) stuck = mode === 'page' ? 1000 : stuck + dt;
+        // The page does not follow. Continue from the real place, so the code
+        // does not run ahead.
         if (stuck >= 200) pos = y;
-        // The page grew (more images loaded). It is not the end yet.
-        if (max > lastMax + 1) { stuck = 0; atEnd = 0; }
-        lastMax = max;
-        peak = Math.max(peak, max);
-        // The page suddenly got much shorter: a popup froze it. It is not the end.
-        var frozen = peak > h && max < peak * 0.5;
         tried = false;
         if (mode === 'page') {
           // Wait, then jump one screen.
           waited += dt;
           if (waited >= WAITS[wi] * 1000) {
             waited = 0;
-            pos = clamp(y + dir * h * JUMP, max);
+            pos = clamp(y + dir * h * JUMP);
             setY(pos);
             tried = true;
           }
         } else {
-          pos = clamp(pos + dir * SPEEDS[si] * dt / 1000, max);
+          pos = clamp(pos + dir * SPEEDS[si] * dt / 1000);
           setY(pos);
           tried = true;
         }
-        prevY = y;
-        // At the end (or the top, when moving up)? Also count it when the page
-        // is stuck near the end, because Safari's toolbars change the screen
-        // height. Far from the end, a stuck page is held, not at the end.
-        var edge = !frozen && (dir > 0
-          ? pos >= max - 1 || (stuck >= 400 && y >= max - h)
-          : pos <= 0 || (stuck >= 400 && y <= 1));
-        // At the start of an end, check again which part of the page scrolls.
-        // A wrong part (for example a small list) would end too early.
-        if (edge && atEnd === 0 && pendWait === 0) {
-          var again = pick() || root;
-          if (again !== tgt) {
-            tgt = again;
-            instant(true);
-            pos = getY();
-            resetEnd();
-            edge = false;
-          }
-        }
+        // The end of the chapter (or the top, when moving up): the code pushes
+        // the page and it does not move. This works at every size, because it
+        // does not use the page height.
+        var edge = dir > 0 ? stuck >= 500 : (y <= 0 || stuck >= 500);
         if (edge && dir > 0 && pendWait < IMAGE_WAIT && imagesPending()) {
-          // Images near the bottom are still loading. Wait for them (up to 8 s).
+          // Images near the bottom are still loading. Wait for them.
           if (pendWait === 0) say('Waiting for images…');
           pendWait += dt;
           atEnd = 0;
@@ -654,14 +605,6 @@
           if (edge && atEnd === 0 && dir > 0 && autoNext) say('End of chapter. Next chapter soon…');
           atEnd = edge ? atEnd + dt : 0;
           if (!edge) pendWait = 0;
-        }
-        // Safety net: the page has not moved for a long time near the bottom.
-        // Go to the next chapter, whatever the other checks say.
-        var still = Date.now() - movedAt;
-        var limit = mode === 'page' ? WAITS[wi] * 1000 + 5000 : 5000;
-        if (dir > 0 && autoNext && still > limit && atEnd <= END_WAIT && nearEnd(y, h)) {
-          say('No movement near the end. Next chapter…');
-          atEnd = END_WAIT + 1;
         }
         // Wait a short time at the end. Then go to the next chapter.
         // If there is none, stop.

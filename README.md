@@ -17,11 +17,11 @@ You can also add the Scroller page to your Home Screen (**Share**, then **Add to
 
 ## Version
 
-The start page shows the version (for example "Version 20"). The bar shows it at the bottom (for example "v20"). If the bar shows a lower number than the start page, your bookmark is old: copy it again. Each update raises the number by 1. To change it, edit `VERSION` near the top of `reader.js`.
+The start page shows the version (for example "Version 21"). The bar shows it at the bottom (for example "v21"). If the bar shows a lower number than the start page, your bookmark is old: copy it again. Each update raises the number by 1. To change it, edit `VERSION` near the top of `reader.js`.
 
 ### Status panel
 
-Tap the version at the bottom of the bar (for example "v20") to show or hide the status panel. It shows what Scroller sees: which part of the page scrolls, the place and the end of the page, how long the page has not moved, images still loading, and the next chapter link it found. If something goes wrong, take a screenshot with the panel open.
+Tap the version at the bottom of the bar (for example "v21") to show or hide the status panel. It shows what Scroller sees: which part of the page scrolls, the place on the page, how long the page has been stuck, images still loading, and the next chapter link it found. If something goes wrong, take a screenshot with the panel open.
 
 ## Use it
 
@@ -46,13 +46,13 @@ The page stops at the end (or at the top, when it moves up).
 
 ### Next chapter
 
-When the page reaches the bottom, Scroller waits until the images near the screen have loaded (up to 8 seconds, and it shows "Waiting for images…"), then 1.5 seconds more. Then it goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds no link, it adds 1 to the chapter number in the page address (for example `chapter-02` becomes `chapter-03`, and `113` becomes `114`). It uses the number after a word like "chapter" or "ep", or else the last number. If that address does not exist, or the site sends you to another page, it stops and shows "No next chapter".
+When the page reaches the bottom, Scroller waits until the images near the screen have loaded (up to 6 seconds, and it shows "Waiting for images…"), then 1.5 seconds more. Then it goes to the next chapter by itself. It finds next chapter links, arrow icons, and buttons, including words in some other languages. It skips "Previous" and "Back" links. If it finds no link, it adds 1 to the chapter number in the page address (for example `chapter-02` becomes `chapter-03`, and `113` becomes `114`). It uses the number after a word like "chapter" or "ep", or else the last number. If that address does not exist, or the site sends you to another page, it stops and shows "No next chapter".
 
 Tap **▼** at the bottom of a page to go to the next chapter at once. Tap **Next** on the bar to turn this off (the button then shows a line through it). It works only when the page moves down.
 
 On most sites, the next chapter loads into the same page, and Scroller keeps running. Some sites add their images with their own code. On those sites, Scroller opens the next chapter as a new page. Tap **Scroller** once, and it starts playing. Scroller also opens a new page if the site does not answer in 15 seconds.
 
-Scroller does not go to the next chapter when something holds the page in place far from the end (for example a popup), or when image slider buttons say "next". It ignores hidden parts of the page, such as a hidden chapter menu. As a safety net, if the page has not moved for 5 seconds within one screen of the end, it goes to the next chapter.
+Scroller finds the end of a chapter when it pushes the page down and the page does not move for half a second. It does not use the page height, because Safari can give the height in other units when the size is not 100%. So a popup that holds the page in place also counts as the end. Scroller ignores hidden parts of the page, such as a hidden chapter menu, and image slider buttons that say "next".
 
 If a site picks the wrong link, turn **Next** off on that site.
 
