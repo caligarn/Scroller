@@ -47,7 +47,7 @@
   // Time at the bottom before going to the next chapter, in milliseconds.
   var END_WAIT = 1500;
   // At the bottom, wait up to this long for images that are still loading.
-  var IMAGE_WAIT = 10000;
+  var IMAGE_WAIT = 8000;
   // Stop waiting for the next chapter to load after this long, in milliseconds.
   var LOAD_LIMIT = 15000;
   // Buttons that were tapped but did not open a new chapter. They are not tapped again.
@@ -59,7 +59,10 @@
     var best = null, gap = 0;
     document.querySelectorAll('body *').forEach(function (el) {
       var g = el.scrollHeight - el.clientHeight;
-      if (g > gap && el.clientHeight > innerHeight * 0.5 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { best = el; gap = g; }
+      // Use an inner box only when it fills most of the screen. A small box
+      // (for example a chapter list) is not the page you read.
+      if (g > gap && el.clientHeight > innerHeight * 0.7 && el.clientWidth > innerWidth * 0.5 &&
+          /(auto|scroll)/.test(getComputedStyle(el).overflowY)) { best = el; gap = g; }
     });
     return (root.scrollHeight - root.clientHeight >= gap) ? root : best;
   }
@@ -199,11 +202,15 @@
     }
   }
 
-  // True while images on the page are still loading.
+  // True while images near the screen are still loading. Hidden images and
+  // images far away do not count, because they may never load.
   function imagesPending() {
-    var imgs = document.images;
+    var imgs = document.images, vh = innerHeight;
     for (var i = 0; i < imgs.length; i++) {
-      if (imgs[i].getAttribute('src') && !imgs[i].complete) return true;
+      var im = imgs[i];
+      if (!im.getAttribute('src') || im.complete || im.offsetParent === null) continue;
+      var r = im.getBoundingClientRect();
+      if (r.bottom > -vh && r.top < vh * 3) return true;
     }
     return false;
   }
@@ -217,12 +224,31 @@
   function setY(y) { if (tgt === root) window.scrollTo(0, y); else tgt.scrollTop = y; }
   // The visible height of the part that scrolls.
   function screenH() { return tgt === root ? innerHeight : tgt.clientHeight; }
-  function maxY() { return Math.max(0, tgt.scrollHeight - tgt.clientHeight); }
+  // The end of the page (the largest scroll place).
+  // When the size is not 100%, Safari gives the height of the whole page in
+  // different units from the scroll place. So for the whole page, the code
+  // finds the real end: it moves to the bottom and back at once (you do not
+  // see this). It keeps the answer for half a second.
+  var endY = 0, endAt = 0;
+  function maxY(fresh) {
+    if (tgt !== root) return Math.max(0, tgt.scrollHeight - tgt.clientHeight);
+    var now = Date.now();
+    if (fresh || now - endAt > 500) {
+      var y = window.scrollY;
+      if (!on) instant(true);
+      window.scrollTo(0, 1e9);
+      endY = window.scrollY;
+      window.scrollTo(0, y);
+      if (!on) instant(false);
+      endAt = now;
+    }
+    return endY;
+  }
 
   // True when the page cannot move down any more.
   function atBottom() {
     var y = getY();
-    if (y >= maxY() - 2) return true;
+    if (y >= maxY(true) - 2) return true;
     // Safari's toolbars change the screen height. Test with a small move.
     instant(true);
     setY(y + 2);
@@ -365,9 +391,9 @@
   function fixImages(rootEl) {
     rootEl.querySelectorAll('img, source').forEach(function (img) {
       ['data-src', 'data-lazy-src', 'data-original', 'data-url', 'data-lazy'].forEach(function (k) {
+        // The real image address. The site's own code would copy it into place.
         var v = img.getAttribute(k);
-        var src = img.getAttribute('src') || '';
-        if (v && (!src || /^data:|blank|placeholder|loading|lazy/i.test(src))) img.setAttribute('src', v);
+        if (v && /^(https?:|\/|\.)|^[\w-]+[\/.]/.test(v) && v !== img.getAttribute('src')) img.setAttribute('src', v);
       });
       var ss = img.getAttribute('data-srcset') || img.getAttribute('data-lazy-srcset');
       if (ss) img.setAttribute('srcset', ss);
@@ -531,8 +557,21 @@
         var edge = !frozen && (dir > 0
           ? pos >= max - 1 || (stuck >= 400 && y >= max - h)
           : pos <= 0 || (stuck >= 400 && y <= 1));
+        // At the start of an end, check again which part of the page scrolls.
+        // A wrong part (for example a small list) would end too early.
+        if (edge && atEnd === 0 && pendWait === 0) {
+          var again = pick() || root;
+          if (again !== tgt) {
+            tgt = again;
+            instant(true);
+            pos = getY();
+            resetEnd();
+            edge = false;
+          }
+        }
         if (edge && dir > 0 && pendWait < IMAGE_WAIT && imagesPending()) {
-          // Images at the bottom are still loading. Wait for them (up to 10 s).
+          // Images near the bottom are still loading. Wait for them (up to 8 s).
+          if (pendWait === 0) say('Waiting for images…');
           pendWait += dt;
           atEnd = 0;
         } else {
