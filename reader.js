@@ -4,6 +4,9 @@
 (function () {
   if (window.__scroller) { window.__scroller.stop(); return; }
 
+  // Raise this number with every update. The start page and the bar show it.
+  var VERSION = '19';
+
   // Tapping the bookmark starts playing at once, with the saved settings.
   // Tap the pause button to read without scrolling.
 
@@ -81,6 +84,7 @@
     '.mode{white-space:nowrap}.dir{font-size:17px}.nextoff{opacity:.45;text-decoration:line-through}' +
     'span{width:40px;padding:2px 0;text-align:center;font-variant-numeric:tabular-nums;opacity:.85}' +
     'i{width:18px;height:1px;background:rgba(255,255,255,.25);margin:4px 0}' +
+    '.ver{font-size:9px;opacity:.5;padding:4px 0 2px}' +
     '.note{display:none;position:absolute;left:60px;top:50%;transform:translateY(-50%);white-space:nowrap;padding:8px 12px;' +
     'border-radius:10px;background:rgba(20,20,24,.85);color:#fff;font:13px -apple-system,system-ui,sans-serif}';
   // Some sites block style tags. A constructed style sheet still works there.
@@ -144,6 +148,7 @@
   var play = el('button', '▶', 'Start scrolling', toggle);
   play.className = 'play';
   el('button', '▼', 'Forward one screen', function () { step(1); });
+  el('span', 'v' + VERSION, 'Version ' + VERSION).className = 'ver';
 
   function short(n) { return n >= 10000 ? n / 1000 + 'k' : String(n); }
 

@@ -15,6 +15,10 @@ No Favorites bar? Open **Settings**, then **Apps**, then **Safari**. Turn on **S
 
 You can also add the Scroller page to your Home Screen (**Share**, then **Add to Home Screen**). It keeps the setup steps close.
 
+## Version
+
+The start page shows the version (for example "Version 19"). The bar shows it at the bottom (for example "v19"). If the bar shows a lower number than the start page, your bookmark is old: copy it again. Each update raises the number by 1. To change it, edit `VERSION` near the top of `reader.js`.
+
 ## Use it
 
 1. Open a manga page in Safari.
